@@ -26,6 +26,7 @@ mkdir -p "$ROOT/usr/bin" \
          "$ROOT/usr/share/luci/menu.d" \
          "$ROOT/www/luci-static/resources/view/sbair" \
          "$ROOT/www/luci-static/resources/tools" \
+         "$ROOT/www/luci-static/resources/protocol" \
          "$ROOT/etc/init.d"
 
 put() {   # put <src> <dst> <mode>
@@ -46,6 +47,10 @@ for v in signal sim device; do
 	    "$ROOT/www/luci-static/resources/view/sbair/$v.js"                   0644
 done
 
+# netifd の ql_datacall proto を LuCI の Interfaces から触れるようにする。
+# **ベンダは proto スクリプトだけ入れて LuCI 側の JS を入れていない。**
+put "$SELF/htdocs/luci-static/resources/protocol/ql_datacall.js" \
+    "$ROOT/www/luci-static/resources/protocol/ql_datacall.js"                0644
 put "$SELF/root/etc/init.d/sbair-apn"    "$ROOT/etc/init.d/sbair-apn"          0755
 
 echo "配置した: $ROOT"
