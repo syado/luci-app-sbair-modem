@@ -1,0 +1,34 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 soralis0912
+#
+# 起動時に、いま刺さっている SIM の ICCID に対応する APN を network.wan へ流す。
+# 無いと再起動のたびにベンダの値へ戻る (→ docs/API.md)。
+
+START=95
+STOP=01
+
+EXTRA_COMMANDS="apply_now"
+EXTRA_HELP="	apply_now	SIM を待ってから保存済み APN を流す (boot から使う)"
+
+apply_now() {
+	# モデムが SIM を読み終えるまで待つ。起動直後は atcid がまだ上がって
+	# おらず +CCID が空を返す。90 秒見る。
+	for i in $(seq 45); do
+		[ -n "$(/usr/bin/sbair-modem at 'AT+CCID' 2>/dev/null)" ] && break
+		sleep 2
+	done
+	/usr/bin/sbair-modem apn apply 2>&1 | logger -t sbair-apn
+}
+
+boot() {
+	# ⚠ **setsid で切り離すこと。** procd は init スクリプトが返ると
+	# プロセスグループごと片付けるので、`( … ) &` だけでは起動時に
+	# 生き残らない。**実際にこれで一度、起動時だけ効かなかった**
+	# (手で叩くと効くので気付きにくい)。rpcd でも同じ罠を踏んでいる。
+	setsid /etc/init.d/sbair-apn apply_now >/dev/null 2>&1 &
+}
+
+start() {
+	/usr/bin/sbair-modem apn apply
+}

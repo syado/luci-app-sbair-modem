@@ -223,6 +223,47 @@ func apnStatus(ch *ATChannel) map[string]any {
 	return out
 }
 
+// applyToLTE mirrors the entry into /etc/config/lte.
+//
+// **これをやらないと再起動のたびに APN が出荷時の値へ戻る。** ベンダの
+// `/usr/bin/knsh` が起動時に
+//
+//	lte.<mode>.apn           -> network.wan.apn
+//	lte.<mode>.apn_auth_type -> network.wan.auth
+//	lte.<mode>.apn_userid    -> network.wan.username
+//	lte.<mode>.apn_passwd    -> network.wan.password
+//
+// を流し込む。**network.wan だけ直しても上書きされる**(実機で
+// 起動 48 秒後に `sbair-apn` が正しい値を書き、その 4 秒後に knsh が
+// SoftBank の `artemis.air` へ戻すのを観測した)。ベンダの仕組みと
+// 戦わず、参照元の方に正しい値を置く。
+//
+// mode は 5g / lte / backup / test。**どれが選ばれるかは knsh 側で決まる**
+// ので全部そろえる。存在しない mode は uci が黙って弾くので害は無い。
+//
+// 失敗しても致命的ではない(次の起動で戻るだけ)ので、呼び出し側は
+// 続行してよい。
+func applyToLTE(e apnEntry) {
+	if _, err := uci("get", "lte"); err != nil {
+		return // この機体には無い設定。何もしない。
+	}
+	auth := e.Auth
+	if auth == "" {
+		auth = "0"
+	}
+	for _, mode := range []string{"5g", "lte", "backup", "test"} {
+		sec := "lte." + mode
+		if _, err := uci("get", sec); err != nil {
+			continue
+		}
+		_, _ = uci("set", sec+".apn="+e.APN)
+		_, _ = uci("set", sec+".apn_auth_type="+auth)
+		_, _ = uci("set", sec+".apn_userid="+e.Username)
+		_, _ = uci("set", sec+".apn_passwd="+e.Password)
+	}
+	_, _ = uci("commit", "lte")
+}
+
 // apnApply writes the entry for the live SIM into network.wan and restarts it.
 //
 // **何も設定が無いときは触らない。** 空の APN を書き込むと、ベンダの
@@ -274,6 +315,9 @@ func apnApply(ch *ATChannel) map[string]any {
 	if _, err := uci("commit", "network"); err != nil {
 		return map[string]any{"error": fmt.Sprintf("uci commit network: %v", err)}
 	}
+
+	// **/etc/config/lte にも同じ値を入れる。** ここを直さないと再起動で戻る。
+	applyToLTE(e)
 
 	// ifup は netifd に proto を回し直させる。reload だけだと
 	// ql_datacall がセッションを張り直さないことがある。

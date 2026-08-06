@@ -53,7 +53,26 @@ put "$SELF/htdocs/luci-static/resources/protocol/ql_datacall.js" \
     "$ROOT/www/luci-static/resources/protocol/ql_datacall.js"                0644
 put "$SELF/root/etc/init.d/sbair-apn"    "$ROOT/etc/init.d/sbair-apn"          0755
 
+# **rc.d のリンクを自分で張る。** ツリーへの導入では
+# `/etc/init.d/sbair-apn enable` を走らせられない(動いている実機ではないので
+# procd も uci も無い)。
+# **張り忘れると起動時フックが動かず**、APN がベンダの値に戻り
+# (knsh が /etc/config/lte から上書きする)、AT+CNMI も既定に戻ったままになる。
+mkdir -p "$ROOT/etc/rc.d"
+ln -sf ../init.d/sbair-apn "$ROOT/etc/rc.d/S95sbair-apn"
+ln -sf ../init.d/sbair-apn "$ROOT/etc/rc.d/K01sbair-apn"
+
 echo "配置した: $ROOT"
+
+# ベンダの libqlnet / libqlril が /etc/config/ql_ril_service を読んで log_level を
+# 取る。**無いと 1 秒ごとに "uci_load file failed" を吐き続ける。**
+# 中身はログ水準だけで、データコールとは無関係。
+if [ ! -f "$ROOT/etc/config/ql_ril_service" ]; then
+	mkdir -p "$ROOT/etc/config"
+	printf "config ql_ril_service 'common'\n\toption log_level '3'\n" \
+		> "$ROOT/etc/config/ql_ril_service"
+	echo "作成した: /etc/config/ql_ril_service (ログ水準。無いと毎秒エラーを吐く)"
+fi
 
 if [ "$ROOT" = "/" ]; then
 	# menu.d を読み直させる。消しておけば LuCI が作り直す。
