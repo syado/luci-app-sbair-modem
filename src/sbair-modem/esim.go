@@ -14,12 +14,6 @@ import (
 )
 
 // ES10 - the local eUICC operations.
-//
-// **On this device the built-in eSIM has no ISD-R.** The eUICC that answers is
-// whatever card sits in the physical tray, so ES10 only works while
-// AT+ESIMMAP? reports 1 - and then only if that card actually is an eUICC.
-// An ordinary SIM in the tray is a perfectly normal state, not a fault, and
-// has to read as one on screen.
 
 // knownISDR lists the ISD-R AIDs worth trying, standard first.
 //
@@ -218,7 +212,9 @@ func esimStatus(ch *ATChannel) map[string]any {
 
 // esimOp runs one profile operation and reports the result as a plain map, so
 // the same code serves both the rpcd backend and the CLI subcommands.
-func esimOp(ch *ATChannel, method, iccid string) map[string]any {
+//
+// nickname は付随の引数。使うのは esim_nickname だけ。
+func esimOp(ch *ATChannel, method, iccid string, extra ...string) map[string]any {
 	// Refuse early when there is no eUICC, rather than letting it fail deep
 	// inside as an opaque +CME ERROR: 100.
 	kind, _, _, aid := inspectCard(ch)
@@ -269,6 +265,14 @@ func esimOp(ch *ATChannel, method, iccid string) map[string]any {
 		err = client.DisableProfile(id, true)
 	case "esim_delete":
 		err = client.DeleteProfile(id)
+	case "esim_nickname":
+		// **空文字は「名前を消す」。** SGP.22 はそれを許すので、
+		// 未指定と区別せずそのまま渡す。
+		nick := ""
+		if len(extra) > 0 {
+			nick = extra[0]
+		}
+		err = client.SetNickname(id, nick)
 	default:
 		return map[string]any{"error": fmt.Sprintf("unknown operation %q", method)}
 	}
@@ -277,9 +281,10 @@ func esimOp(ch *ATChannel, method, iccid string) map[string]any {
 	}
 	// Enable and disable make the card REFRESH, and it rejects AT+CCHO while
 	// it re-initialises - so the screen should re-read after a short pause,
-	// not immediately.
+	// not immediately. Delete と nickname は REFRESH を起こさない。
+	refresh := method == "esim_enable" || method == "esim_disable"
 	return map[string]any{"result": "ok", "operation": method, "iccid": iccid,
-		"refresh_pending": method != "esim_delete"}
+		"refresh_pending": refresh}
 }
 
 type profileJSON struct {

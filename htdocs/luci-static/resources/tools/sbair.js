@@ -70,6 +70,45 @@ return baseclass.extend({
 		]);
 	},
 
+	// Network → Wireless と同じ見せ方の信号バッジ。
+	// LuCI が持っている signal-*.png をそのまま使うので追加の画像は要らない。
+	//
+	// **セルラーには「品質 %」が無い。** Wi-Fi は signal/noise から出せるが、
+	// こちらは RSRP を段階に割り当てるしかない。-110 dBm を
+	// 下限、-80 dBm を上限とする(この機体で au 在圏時 -76 dBm、SoftBank の
+	// 圏外気味のセルで -111 dBm だった)。
+	signalPercent: function(dbm) {
+		var v = parseFloat(dbm);
+		if (isNaN(v))
+			return null;
+		return Math.max(0, Math.min(100, Math.round((v + 110) / 30 * 100)));
+	},
+
+	signalIcon: function(pct) {
+		var name = 'signal-none';
+		if (pct !== null) {
+			if (pct <= 0)      name = 'signal-0';
+			else if (pct < 25) name = 'signal-0-25';
+			else if (pct < 50) name = 'signal-25-50';
+			else if (pct < 75) name = 'signal-50-75';
+			else               name = 'signal-75-100';
+		}
+		return L.resource('icons/%s.png'.format(name));
+	},
+
+	signalBadge: function(dbm, label) {
+		var pct = this.signalPercent(dbm);
+		return E('span', {
+			'class': 'ifacebadge',
+			'title': (dbm != null && dbm !== '') ? (dbm + ' dBm') : '不明'
+		}, [
+			E('img', { 'src': this.signalIcon(pct) }),
+			' ',
+			(pct === null) ? '不明' : (pct + '%'),
+			label ? E('span', { 'style': 'margin-left:.5em;opacity:.7' }, label) : ''
+		]);
+	},
+
 	simMappingLabel: function(n) {
 		if (n === 1) return '物理スロット (uSIM)';
 		if (n === 2) return '内蔵 eSIM';

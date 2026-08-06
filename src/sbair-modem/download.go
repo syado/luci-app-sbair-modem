@@ -15,10 +15,6 @@ import (
 )
 
 // ES9+ — profile のダウンロード(eSIM のインストール)。
-//
-// **シェルでは書けない唯一の部分。** SM-DP+ への TLS と ECDSA の署名検証、
-// それに完全な ASN.1 が要る。実測で 20〜30 秒かかるので、SIM マッピングの
-// 切替と同じく非同期にしてある(足回りは job.go)。
 
 func startDownload(code, cc string) map[string]any {
 	code = strings.TrimSpace(code)

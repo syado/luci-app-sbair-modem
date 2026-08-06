@@ -2,15 +2,6 @@
 // Copyright (c) 2026 soralis0912
 //
 // SIM 関連。マッピングの切替と、eUICC の profile。
-//
-// **この機体の内蔵 eSIM に ISD-R は無い。** eUICC として応答するのは
-// 物理スロットに挿さっているカードの方で、しかも**それが eUICC とは限らない**。
-// 通常の SIM が挿さっているのは正常な状態なので、エラーではなくそう表示する。
-//
-// 切替は 30〜60 秒かかり ubus の呼び出しはそこまで待てないので、
-// バックエンドはワーカーを切り離して起動し、こちらは simmap_status を
-// 見に行く。simmap_status は状態ファイルを読むだけで AT に触らないため、
-// ワーカーが flock を握っている間も答えられる。
 
 'use strict';
 'require view';
@@ -37,6 +28,8 @@ var callApnSet    = rpc.declare({ object: 'sbair', method: 'apn_set',
 var callApnApply  = rpc.declare({ object: 'sbair', method: 'apn_apply' });
 var callApnDelete = rpc.declare({ object: 'sbair', method: 'apn_delete', params: [ 'iccid' ] });
 var callApnProbe  = rpc.declare({ object: 'sbair', method: 'apn_probe' });
+var callNickname  = rpc.declare({ object: 'sbair', method: 'esim_nickname',
+                                  params: [ 'iccid', 'nickname' ] });
 
 // ql_datacall の auth の値。proto_config_add_int auth。
 var AUTH = { '0': 'なし', '1': 'PAP', '2': 'CHAP', '3': 'PAP/CHAP' };
@@ -255,12 +248,14 @@ return view.extend({
 		var rows = [ sbair.row('状態', locked ? 'ロック中' : '解除済み',
 			locked ? '他社 SIM は使えません' : null) ];
 		// **残り試行回数を必ず出す。** 鍵を間違えるとここが減り、
-		// 使い切ると戻せなくなる。
+		// 使い切ると戻せなくなる。件数(capacity)と取り違えないこと。
 		(lk.categories || []).forEach(function(c) {
 			if (!c.label)
 				return;
 			rows.push(sbair.row('　' + c.label,
-				(c.locked ? 'ロック中' : '解除済み') + ' (残り試行 ' + c.remaining + ')'));
+				(c.locked ? 'ロック中' : '解除済み') +
+				' — 残り試行 ' + c.remaining + '/' + c.max_retry +
+				'、登録 ' + c.entries + '/' + c.capacity + ' 件'));
 		});
 		children.push(sbair.table(rows));
 
@@ -565,11 +560,29 @@ return view.extend({
 					})
 				}, label);
 			};
+			// 名前は付いていれば太字、無ければ profile 名を薄く出す。
+			// **どちらを見ているか分かるようにする** — 名前を付けたのに
+			// 変わっていないように見えるのが一番困る。
+			var label = p.nickname
+				? E('strong', {}, p.nickname)
+				: E('span', { 'style': 'opacity:.7' }, p.name || '-');
+
 			rows.push(E('tr', { 'class': 'tr' }, [
 				E('td', { 'class': 'td left' }, sbair.mask(p.iccid)),
 				E('td', { 'class': 'td left' }, stateBadge(p.state)),
 				E('td', { 'class': 'td left' }, p.provider || '-'),
-				E('td', { 'class': 'td left' }, p.nickname || p.name || '-'),
+				E('td', { 'class': 'td left' }, [
+					label, ' ',
+					E('button', {
+						'class': 'cbi-button cbi-button-neutral',
+						'style': 'padding:0 .4em;margin-left:.3em',
+						'title': '名前を付ける',
+						'disabled': disabled ? '' : null,
+						'click': ui.createHandlerFn(self, function() {
+							return self.editNickname(p);
+						})
+					}, '✎')
+				]),
 				E('td', { 'class': 'td left' }, [
 					on ? btn('無効化', 'esim_disable', 'cbi-button-neutral')
 					   : btn('有効化', 'esim_enable', 'cbi-button-action'),
@@ -612,6 +625,56 @@ return view.extend({
 						});
 					})
 				}, '切り替える')
+			])
+		]);
+	},
+
+	// profile に名前を付ける (ES10c SetNickname)。
+	// **空にすると名前が消える** — SGP.22 がそれを許すので、そのまま渡す。
+	editNickname: function(p) {
+		var self = this;
+		var input = E('input', {
+			'type': 'text',
+			'class': 'cbi-input-text',
+			'style': 'width:100%;max-width:24em',
+			'value': p.nickname || '',
+			'placeholder': p.name || '',
+			'maxlength': '64'
+		});
+		return ui.showModal('profile の名前', [
+			E('p', {}, [
+				'事業者側の名前は ',
+				E('strong', {}, p.provider || '-'), ' / ',
+				E('strong', {}, p.name || '-'),
+				'。ここで付ける名前はカードに保存され、この画面以外でも表示されます。'
+			]),
+			E('div', { 'class': 'cbi-value' }, [
+				E('label', { 'class': 'cbi-value-title' }, '名前'),
+				E('div', { 'class': 'cbi-value-field' }, [
+					input,
+					E('div', { 'class': 'cbi-value-description' },
+						'空にすると付けた名前を消します。')
+				])
+			]),
+			E('div', { 'class': 'right' }, [
+				E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, 'やめる'),
+				' ',
+				E('button', {
+					'class': 'cbi-button cbi-button-action',
+					'click': ui.createHandlerFn(self, function() {
+						return callNickname(p.iccid, input.value || '').then(function(res) {
+							ui.hideModal();
+							if (res && res.error) {
+								ui.addNotification(null, E('p', {}, res.error), 'warning');
+								return;
+							}
+							return callStatus().then(function(st) {
+								self.data.status = st;
+								self.redraw();
+							});
+						});
+					})
+				}, '保存')
 			])
 		]);
 	},

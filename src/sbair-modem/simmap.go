@@ -11,15 +11,6 @@ import (
 )
 
 // SIM マッピングの切替。
-//
-//	物理スロットへ: AT+CFUN=4 → /bin/usim → AT+CFUN=1
-//	内蔵 eSIM へ:   AT+CFUN=4 → AT+ESIMMAP=2 → AT+CFUN=1
-//
-// `/bin/usim` はベンダ純正で、`AT+ESIMMAP=` を手で打つより素性が良い。ただし
-// **`at+cfun?` が `+CFUN: 4` でなければ何もせず内蔵 eSIM に落ちる**ので、
-// 先に CFUN=4 を打つのが必須。切替後 **20〜30 秒は AT が無応答**になる。
-//
-// 非同期の足回りは job.go。
 
 func startSimmap(target int) map[string]any {
 	if target != 1 && target != 2 {

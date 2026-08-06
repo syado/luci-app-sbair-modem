@@ -11,15 +11,6 @@ import (
 )
 
 // SIM ロック(ネットワークロック)の状態と切替。
-//
-// **手順はファームウェアの中にあった。** ベンダのスクリプト
-// `/bin/sim_lock.sh` が `AT+ESMLCK` を打ち、uci の
-// `modeswitch.common.sim_lock` を更新し、LED に通知する。
-// ここでは同じことを自分で行う — スクリプトが無い版でも動くように。
-//
-// ⚠ **解除しただけでは `+CPIN` は変わらない。** SIM の判定は初期化時のもので、
-// `AT+CFUN=4` の往復では足りず、`AT+CFUN=0` → `AT+CFUN=1`(SIM ごと落とす方)
-// が要る。40 秒ほどかかるので job.go の非同期に載せる。
 
 // **鍵と PLMN はファームウェアの /bin/sim_lock.sh から読んだもの。**
 // スクリプトを呼ばず自分で AT を打つのは、スクリプトが無い版でも動かすため。
@@ -33,14 +24,27 @@ const (
 
 // simlockState reads the lock without changing anything.
 //
-// AT+ESMLCK? answers a tuple per category:
+// AT+ESMLCK? はカテゴリごとに 7 要素のタプルを返す:
 //
-//	(0,1,5,0,1,15,0),(1,2,...),(2,1,5,0,1,10,0),...
-//	 ^ ^           ^  ^
-//	 | 状態 1=ロック  | 残り試行
-//	 カテゴリ         ロック中フラグ
+//	(0,1,5,0,1,15,0),(1,2,5,0,0,10,0),(2,1,5,0,1,10,0),…,"<IMSI>",1,16,1,0,2
+//	 │ │ │ │ │ │  └ autolock_count (推定)
+//	 │ │ │ │ │ └─── そのカテゴリに保管できる件数。**定数**
+//	 │ │ │ │ └───── いま登録されているロックデータの件数
+//	 │ │ │ └─────── retry_count (推定)
+//	 │ │ └───────── max_retry_count。**これが試行予算**
+//	 │ └─────────── state: 1 = ロック中 / 2 = 解除済み
+//	 └───────────── カテゴリ 0-6
 //
-// ロックされているのはカテゴリ 0 (ネットワーク) と 2 (サービスプロバイダ)。
+// **6 番目を「残り試行回数」と読んではいけない。** 15/10/10/10/2/2/2 は
+// MDDB の構造体サイズ(code_cat_n 45B ÷ PLMN 3B = 15、code_cat_sp 230B ÷ 23B
+// = 10、…)と一致する容量の定数で、ロック→解除→削除を経ても変わらない。
+// **実際の予算は 3 番目 = 5。** ここを取り違えると「15 回試せる」と誤解する。
+//
+// 4 番目と 7 番目のどちらが retry_count でどちらが autolock_count かは
+// 構造体からは決められない(どちらも 0)。ただし**用途は決まる**:
+// 4 番目が「残り回数」なら 0 = 使い切りのはずで、正しい鍵で解除できた
+// 事実と矛盾する。よって **4 番目は「使った回数」**で、残りは
+// max_retry - retry_count。
 func simlockState(ch *ATChannel) map[string]any {
 	out := map[string]any{}
 
@@ -60,17 +64,28 @@ func simlockState(ch *ATChannel) map[string]any {
 	}
 	out["raw"] = v
 
-	// カテゴリごとの残り試行回数。**鍵を間違えるとここが減り、
-	// 使い切ると戻せなくなる**ので、画面に出して判断材料にする。
 	type cat struct {
 		Category  int    `json:"category"`
 		Label     string `json:"label"`
 		Locked    bool   `json:"locked"`
-		Remaining int    `json:"remaining"`
+		Entries   int    `json:"entries"`   // 登録されているロックデータ件数
+		Capacity  int    `json:"capacity"`  // 保管できる件数 (定数)
+		MaxRetry  int    `json:"max_retry"` // 試行予算
+		Remaining int    `json:"remaining"` // max_retry - retry_count
 	}
+	// カテゴリ 0-4 は 3GPP TS 22.022 の personalisation category。
+	// **5 と 6 は MTK の拡張**で、規格には無い(モデム内の +CPIN 文字列表に
+	// PH-NSSP / PH-SIMC があることで確認)。
 	labels := map[int]string{
 		0: "ネットワーク", 1: "ネットワークサブセット", 2: "サービスプロバイダ",
 		3: "コーポレート", 4: "SIM/USIM",
+		5: "ネットワークサブセット+事業者 (MTK 拡張)",
+		6: "SIM+コーポレート (MTK 拡張)",
+	}
+	num := func(s string) int {
+		var n int
+		fmt.Sscanf(strings.TrimSpace(s), "%d", &n)
+		return n
 	}
 	var cats []cat
 	for _, part := range strings.Split(v, ")") {
@@ -86,7 +101,10 @@ func simlockState(ch *ATChannel) map[string]any {
 		}
 		c.Label = labels[c.Category]
 		c.Locked = strings.TrimSpace(f[1]) == "1"
-		fmt.Sscanf(f[5], "%d", &c.Remaining)
+		c.MaxRetry = num(f[2])
+		c.Entries = num(f[4])
+		c.Capacity = num(f[5])
+		c.Remaining = c.MaxRetry - num(f[3])
 		cats = append(cats, c)
 	}
 	if len(cats) > 0 {

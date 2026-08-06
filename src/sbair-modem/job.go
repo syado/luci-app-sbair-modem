@@ -13,14 +13,6 @@ import (
 )
 
 // 時間のかかる処理の共通の足回り。
-//
-// SIM マッピングの切替は 30〜60 秒、profile のダウンロードは 20〜30 秒かかる。
-// **ubus の呼び出しはそこまで待てない。** どちらも同じ形にしてある:
-//
-//   - `<job>` を始めるメソッドはワーカーを切り離して起動し、すぐ返る
-//   - ワーカーは進捗を `/tmp/sbair-<job>.json` に書く
-//   - `<job>_status` はその**ファイルだけ**を読む。**AT には触らない**
-//     (ワーカーが flock を握っている間こそ進捗を見たいため)
 
 type jobState struct {
 	State   string   `json:"state"` // running / done / error

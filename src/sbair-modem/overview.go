@@ -283,15 +283,45 @@ func collectRegistration(o *Overview, ask func(string) []string) {
 	// answers `+COPS: 0,255,"",0`, and reading that 0 as an access technology
 	// puts "GSM" on the screen of a 5G router that is not attached to
 	// anything.
-	if v, ok := First(ask("AT+COPS?"), "+COPS:"); ok {
-		f := splitAT(v)
-		if len(f) > 2 && f[2] != "" {
-			o.Operator = f[2]
-			if len(f) > 3 {
-				if s, hit := accessTech[f[3]]; hit && o.AccessTech == "" {
-					o.AccessTech = s
-				}
-			}
+	// **名前と PLMN の両方を出す。** <operator> は書式次第で「KDDI」にも
+	// 「44054」にもなるので、両方読んで `KDDI (44054)` の形にする。
+	// 書式の切替は `AT+COPS=3,<format>`(0 = 長い英数字名 / 2 = 数字)。
+	//
+	// 未登録のときは名前も PLMN も空なので 2 回読む意味が無い。何もしない。
+	if !o.Registered {
+		return
+	}
+	cops := func(format string) []string {
+		ask("AT+COPS=3," + format)
+		if v, ok := First(ask("AT+COPS?"), "+COPS:"); ok {
+			return splitAT(v)
+		}
+		return nil
+	}
+	field := func(f []string, i int) string {
+		if len(f) > i {
+			return f[i]
+		}
+		return ""
+	}
+
+	num, name := cops("2"), cops("0")
+	n, pl := field(name, 2), field(num, 2)
+	switch {
+	case n != "" && pl != "" && n != pl:
+		o.Operator = n + " (" + pl + ")"
+	case n != "":
+		o.Operator = n
+	default:
+		o.Operator = pl
+	}
+	// AcT は書式に関係なく同じ位置。取れた方から。
+	for _, f := range [][]string{name, num} {
+		if o.AccessTech != "" {
+			break
+		}
+		if s, hit := accessTech[field(f, 3)]; hit {
+			o.AccessTech = s
 		}
 	}
 }

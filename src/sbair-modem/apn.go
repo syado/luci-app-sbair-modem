@@ -14,18 +14,6 @@ import (
 )
 
 // APN の保存と適用。
-//
-// **ICCID をキーにする。** SIM を差し替えたり eSIM の profile を切り替えると
-// APN も変わるが、`network.wan` は 1 つしか無い。ICCID ごとに覚えておいて、
-// 今刺さっているカードに合うものを流し込む形にすれば、切り替えのたびに
-// 手で入れ直さずに済む。
-//
-// 保存先は `/etc/config/sbair`(UCI)なので**再起動をまたいで残る**。
-// 適用先は `network.wan` で、proto は `ql_datacall`。この proto は
-// apn / auth / username / password / iptype を受け付ける。
-//
-// UCI は外部コマンドで触る。libuci の Go バインディングは CGO が要り、
-// static バイナリという前提を壊すため。
 
 const (
 	apnConfig = "sbair"
@@ -262,6 +250,27 @@ func apnApply(ch *ATChannel) map[string]any {
 	set("username", e.Username)
 	set("password", e.Password)
 	set("iptype", e.IPType)
+
+	// **auto_conf は必ず 0 にする。** 1 のままだと netifd の proto が
+	// `check_auto_apn_prov` を呼ぶが、その関数のループは**データが欠けて
+	// いるときにしか retry を減らさない**:
+	//
+	//	retry=2
+	//	while [ "$retry" -gt 0 ]; do
+	//	    apn_data=`ql_datacall --apn_provision_by_sim`
+	//	    ...
+	//	    if [ -z "$db_user" ] || [ -z "$db_password" ] || [ -z "$db_auth_type" ]; then
+	//	        let retry--
+	//	    fi
+	//	    sleep 1
+	//	done          # ← 成功時に break が無い
+	//
+	// SIM が完全な APN を返すと**永久に抜けない**。実機で au の SIM が
+	// user/password/auth_type を全部返し、WAN の setup がここで止まって
+	// `starting connection` に到達しない。
+	// こちらで APN を管理する以上、その仕組みは使わない。
+	_, _ = uci("set", wanIface+".auto_conf=0")
+
 	if _, err := uci("commit", "network"); err != nil {
 		return map[string]any{"error": fmt.Sprintf("uci commit network: %v", err)}
 	}
