@@ -1,0 +1,4 @@
+# ビルド成果物。ソースから作る (./build.sh)
+/out/
+/src/sbair-modem/sbair-modem
+*.o

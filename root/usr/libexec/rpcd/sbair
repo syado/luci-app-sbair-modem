@@ -1,0 +1,8 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 soralis0912
+#
+# rpcd calls this with "list", or with "call <method>" and JSON on stdin.
+# Everything it does lives in the Go binary; a shim keeps the entry point
+# independent of how that binary is named or dispatched.
+exec /usr/bin/sbair-modem rpcd "$@"

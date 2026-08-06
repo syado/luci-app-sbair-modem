@@ -1,0 +1,36 @@
+{
+	"luci-app-sbair-modem": {
+		"description": "SoftBank Air 6 のモデム情報と eSIM 管理",
+		"read": {
+			"ubus": {
+				"sbair": [
+					"overview",
+					"esim_status",
+					"esim_list",
+					"simmap_get",
+					"simmap_status",
+					"esim_download_status",
+					"simlock_get",
+					"simlock_status",
+					"apn_status",
+					"apn_probe"
+				]
+			}
+		},
+		"write": {
+			"ubus": {
+				"sbair": [
+					"esim_enable",
+					"esim_disable",
+					"esim_delete",
+					"simmap_set",
+					"esim_download",
+					"simlock_set",
+					"apn_set",
+					"apn_delete",
+					"apn_apply"
+				]
+			}
+		}
+	}
+}
