@@ -55,7 +55,7 @@ function render(data) {
 	]) ]));
 
 	// ATI は Quectel と名乗るが中身は MediaTek。セル情報系のベンダ AT は
-	// 全て +CME ERROR: 4 で、AT+QTEMP と AT+QUIMSLOT? だけが応答する。
+	// この機体が答える数少ないベンダコマンドの 1 つ。
 	body.push(sbair.section('温度 (AT+QTEMP)', [ tempTable(data.temperatures) ]));
 
 	body.push(sbair.errorBox(data.errors));

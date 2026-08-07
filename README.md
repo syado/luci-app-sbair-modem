@@ -23,7 +23,7 @@
 
 | | |
 |---|---|
-| **電波状況** | ネットワーク登録 / 事業者 / 接続方式 / TAC / Cell ID と RSSI・RSRP・RSRQ。15 秒ごとに更新。<br>**IMS の有効/無効**と**モデムのリセット**(`AT+CFUN=0` → `1` → `ifup wan`)もここ |
+| **電波状況** | ネットワーク登録 / 事業者 / 接続方式 / TAC / Cell ID と RSSI・RSRP・RSRQ。15 秒ごとに更新。<br>**バンドの表示と選択**(LTE / 5G。ネットワークにつながらなければ自動で巻き戻す)と**アンテナごとの RSRP・SINR**。<br>**IMS の有効/無効**と**モデムのリセット**(`AT+CFUN=0` → `1` → `ifup wan`)もここ |
 | **SIM** | マッピングと切替 / カード種別 / 電話番号 / **SIM ロックの解除・再設定** / **APN**(ICCID ごとに保存)/ eUICC の EID と profile の一覧・命名・操作・インストール (ES9+) |
 | **SMS** | **受信専用。** SIM(電話番号)ごとに一覧。取り込み・削除。保管は SQLite |
 | **デバイス情報** | 機種 / ファームウェア / IMEI と `AT+QTEMP` の温度 27 センサ |
@@ -46,10 +46,7 @@ luci-app-sbair-modem/
 │   └── view/sbair/{signal,sim,sms,device}.js
 ├── root/etc/init.d/sbair-apn          起動時に APN を流し、AT+CNMI を入れ直す
 ├── src/sbair-modem/                   バックエンド (Go)
-└── docs/
-    ├── AT.md                          AT 経路の仕様
-    ├── ESIM.md                        eUICC / ESIMMAP の仕様
-    └── API.md                         ubus API と LuCI 画面 (SMS / IMS / リセットもここ)
+└── docs/API.md                       ubus API と LuCI 画面 (SMS / IMS / バンド / リセット)
 ```
 
 ```
@@ -91,20 +88,20 @@ goenv を使うなら `export PATH=$HOME/.goenv/bin:$HOME/.goenv/shims:$PATH`。
 
 - **内蔵 eSIM に ISD-R は無い。** eUICC を操作できるのは物理スロットのカードだけで、
   `AT+ESIMMAP?` が `1` のときに限られる。**しかも、そのカードが eUICC とは限らない** —
-  通常の SIM が挿さっているのは正常な状態として扱う(→ [docs/ESIM.md](docs/ESIM.md))
+  通常の SIM が挿さっているのは正常な状態として扱う(→ [ESIM_AT.md](https://github.com/soralis0912/sbair6-rs/blob/main/docs/ESIM_AT.md))
 - **`AT+ESIMMAP=<n>` を素で打たない。** 必ず `AT+CFUN=4` で落としてから。
   切替後 20〜30 秒は AT が無応答
 - **再起動すると物理スロット側へ移る。** そこに有効な profile が無ければ圏外になる
 - **SIM ロックは `AT+ESMLCK` を直接発行して解除する**(ベンダの `/bin/sim_lock.sh` は
-  戻り値を見ないので使わない)。解除後は `AT+CFUN=0` → `1` が要る(→ [docs/AT.md](docs/AT.md))
-- **IMS は出荷状態で無効。** SoftBank Air は音声サービスを持たないのでベンダが切っている。
+  戻り値を見ないので使わない)。解除後は `AT+CFUN=0` → `1` が要る(→ [AT.md](https://github.com/soralis0912/sbair6-rs/blob/main/docs/AT.md))
+- **IMS は出荷状態で無効。**
   **SMS は IMS 経由で配送されるので、未登録だと 1 通も届かない。**
   電波状況タブから有効にできる。**再起動はまたぐ**が、設定を初期化すると
   SIM ロックが戻って在圏しなくなり、IMS も登録できなくなる
 - **SMS の取り込みは、モデム側の未読を既読に変える**(`AT+CMGL` の仕様で避けられない)。
   保管庫には最初に取り込んだときの未読状態が残る。純正 WebUI の未読表示は消える
 - **eSIM のインストールには、この機体からインターネットへ出られることが要る。**
-  既定ではデフォルトルートが無い(→ [docs/ESIM.md](docs/ESIM.md))
+  既定ではデフォルトルートが無い(→ [ESIM_AT.md](https://github.com/soralis0912/sbair6-rs/blob/main/docs/ESIM_AT.md))
 
 ---
 
