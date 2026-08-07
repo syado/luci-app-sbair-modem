@@ -298,7 +298,9 @@ function resetSection(self) {
 function statusRow(self) {
 	var data = self.data || {};
 	var dbm = data.rsrp_dbm || data.rssi_dbm || null;
-	return E('div', { 'class': 'cbi-section' },
+	// 余白の付け方は sbair.section と揃える。**下のチェックボックスと
+	// くっつかないように。**
+	return E('div', { 'class': 'cbi-section sbair-section' },
 		E('div', { 'style': 'display:flex;align-items:center;gap:1em;flex-wrap:wrap' }, [
 			sbair.signalBadge(dbm, data.rsrp_dbm ? 'RSRP' : (data.rssi_dbm ? 'RSSI' : '')),
 			E('span', {}, data.registered

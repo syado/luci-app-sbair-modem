@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 soralis0912
 //
-// 3 つのタブで共通に使う小物。
+// タブで共通に使う小物。
 
 'use strict';
 'require baseclass';
@@ -10,6 +10,20 @@
 // 設置場所と契約者の特定に直結するので、画面を撮って貼る前提で既定を選ぶ。
 // タブをまたいで同じ状態を使う。
 var revealed = false;
+
+// セクションの余白。**1 回だけ差し込む。** node で描画を試すときは
+// document が無いので、その場合は何もしない。
+var sectionStyled = false;
+function injectSectionStyle() {
+	if (sectionStyled || typeof document === 'undefined')
+		return;
+	sectionStyled = true;
+	var s = document.createElement('style');
+	s.textContent =
+		'.sbair-section{margin-bottom:18px}' +
+		'.sbair-section > .table:last-child,.sbair-section > pre:last-child{margin-bottom:0}';
+	document.head.appendChild(s);
+}
 
 return baseclass.extend({
 	isRevealed: function() {
@@ -56,8 +70,17 @@ return baseclass.extend({
 		]);
 	},
 
+	// ⚠ **セクションの下の余白は表が持っている。** テーマの CSS には
+	// `.cbi-section` にも `h3` にも余白が無く、`.table { margin-bottom: 18px }`
+	// だけが間隔を作っている。**だから表以外(説明文やボタン)で終わると
+	// 次のタイトルが直に続いてしまう。**
+	//
+	// 余白をセクション側へ移し、**表が最後のときはその余白を消して**
+	// 二重にしない。どちらで終わっても同じ 18px になる。
 	section: function(title, children) {
-		return E('div', { 'class': 'cbi-section' }, [ E('h3', {}, title) ].concat(children));
+		injectSectionStyle();
+		return E('div', { 'class': 'cbi-section sbair-section' },
+			[ E('h3', {}, title) ].concat(children));
 	},
 
 	table: function(rows) {
@@ -129,7 +152,8 @@ return baseclass.extend({
 	errorBox: function(errors) {
 		if (!errors || !errors.length)
 			return '';
-		return E('div', { 'class': 'cbi-section' }, [
+		injectSectionStyle();
+		return E('div', { 'class': 'cbi-section sbair-section' }, [
 			E('h3', {}, '取得できなかった項目'),
 			E('pre', { 'style': 'white-space:pre-wrap' }, errors.join('\n'))
 		]);
