@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -136,6 +137,24 @@ func runSimlockWorker(arg string) int {
 	}
 	defer ch.Disconnect()
 
+	step, msg, err := simlockApply(ch, arg == "on", j.step)
+	if err != nil {
+		return j.fail(step, err.Error())
+	}
+	return j.done(step, msg)
+}
+
+// simlockApply does the switch on an **already open** channel.
+//
+// ⚠ **自前でチャネルを開かないこと。** flock はプロセスの寿命ぶん保持される
+// (`Disconnect()` では手放されない) ので、AT を掴んだまま別のチャネルを
+// 開こうとすると**自分自身に弾かれる**。実機でこれを踏んだ:
+// `another sbair-modem is using the modem`。
+func simlockApply(ch *ATChannel, on bool, step func(string)) (string, string, error) {
+	arg := "off"
+	if on {
+		arg = "on"
+	}
 	// **個々のコマンドの失敗で打ち切らない。** これは宣言的な操作で、
 	// 既に解除済みのカテゴリを解除しようとすると `+CME ERROR: 100` が
 	// 返るが、望む状態にはなっている。**判定は最後の検証で行う。**
@@ -148,7 +167,7 @@ func runSimlockWorker(arg string) int {
 	}
 
 	// 掛け直しの前にも解除が要る。既存のルールを消さずに追加すると積み上がる。
-	j.step("ロックを解除 (AT+ESMLCK)")
+	step("ロックを解除 (AT+ESMLCK)")
 	for _, c := range []string{"0", "2"} {
 		for _, op := range []string{"0", "3"} { // 0 = 解除 / 3 = ルール削除
 			run(fmt.Sprintf("AT+ESMLCK=%s,%s,%q", c, op, simlockKey))
@@ -156,7 +175,7 @@ func runSimlockWorker(arg string) int {
 	}
 
 	if arg == "on" {
-		j.step("ロックを設定 (AT+ESMLCK)")
+		step("ロックを設定 (AT+ESMLCK)")
 		run(fmt.Sprintf("AT+ESMLCK=0,2,%q,%q", simlockKey, simlockWCP))
 		run(fmt.Sprintf("AT+ESMLCK=2,2,%q,%q,%q", simlockKey, simlockSB, simlockGID))
 	}
@@ -176,19 +195,19 @@ func runSimlockWorker(arg string) int {
 
 	// **CFUN=4 では足りない。** SIM ごと落とさないと +CPIN の判定が
 	// 初期化時のまま残り、解除しても PH-NET PIN が消えない。
-	j.step("SIM を読み直す (AT+CFUN=0)")
+	step("SIM を読み直す (AT+CFUN=0)")
 	if _, err := ch.Command("AT+CFUN=0"); err != nil {
-		return j.fail("AT+CFUN=0", err.Error())
+		return "AT+CFUN=0", "", err
 	}
 	time.Sleep(15 * time.Second)
 
-	j.step("電波を戻す (AT+CFUN=1)")
+	step("電波を戻す (AT+CFUN=1)")
 	if _, err := ch.Command("AT+CFUN=1"); err != nil {
 		time.Sleep(10 * time.Second)
 		_, _ = ch.Command("AT+CFUN=1")
 	}
 
-	j.step("SIM の状態を確認")
+	step("SIM の状態を確認")
 	want := (arg == "on")
 	for i := 0; i < 12; i++ {
 		time.Sleep(5 * time.Second)
@@ -207,12 +226,12 @@ func runSimlockWorker(arg string) int {
 		}
 		msg := fmt.Sprintf("SIM: %s / ロック: %v", pin, locked)
 		if locked == want {
-			return j.done("完了", msg)
+			return "完了", msg, nil
 		}
 		// 望む状態になっていない。**そのときだけ**、途中で出た誤りを見せる。
 		if i == 11 && len(notes) > 0 {
-			return j.fail("確認", msg+" / "+strings.Join(notes, " / "))
+			return "確認", "", errors.New(msg + " / " + strings.Join(notes, " / "))
 		}
 	}
-	return j.fail("確認", "切替後に SIM の状態を確認できませんでした。")
+	return "確認", "", errors.New("切替後に SIM の状態を確認できませんでした。")
 }

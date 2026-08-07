@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // APN の保存と適用。
@@ -292,8 +293,15 @@ func ensureModemState(ch *ATChannel, e apnEntry, slow bool) []string {
 			if !slow {
 				notes = append(notes, "SIM ロックが掛かっています。SIM のページから解除してください。")
 			} else {
-				notes = append(notes, "SIM ロックを解除しました。")
-				runSimlockWorker("off")
+				// **開いているチャネルのまま解除する。** ワーカーを呼ぶと
+				// 自前でチャネルを開こうとして flock で自分自身に弾かれる。
+				ch.SetTimeout(30 * time.Second)
+				_, msg, err := simlockApply(ch, false, func(string) {})
+				if err != nil {
+					notes = append(notes, "SIM ロックを解除できません: "+err.Error())
+				} else {
+					notes = append(notes, "SIM ロックを解除しました ("+msg+")。")
+				}
 			}
 		}
 	}
