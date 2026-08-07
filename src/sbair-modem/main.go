@@ -2,14 +2,6 @@
 // Copyright (c) 2026 soralis0912
 
 // sbair-modem - modem and eSIM control for the SoftBank Air 6 / RG620T-SBK.
-//
-// The AT entry point, the rpcd backend behind the LuCI screens, the local ES10
-// eUICC operations and the ES9+ download, over the shared AT layer in
-// atchannel.go.
-//
-// Build (static, no libc dependency, for OpenWrt aarch64/musl):
-//
-//	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o sbair-modem .
 package main
 
 import (
@@ -104,6 +96,8 @@ func main() {
 			os.Exit(2)
 		}
 		os.Exit(runSimlockWorker(args[1]))
+	case "reset-worker":
+		os.Exit(runResetWorker())
 	case "download-worker":
 		if len(args) < 2 {
 			os.Exit(2)
@@ -166,8 +160,24 @@ func main() {
 		}
 		emit(simlockState(ch))
 		return
+	case "reset":
+		// CLI では待って構わないので、ワーカーの中身をそのまま同期で回す。
+		ch.Disconnect() // ワーカーが lock を取れるように手放す
+		runResetWorker()
+		emit(readJob("reset"))
+		return
 	case "list":
 		emit(esimOp(ch, "esim_list", ""))
+		return
+	case "nickname":
+		if len(args) < 2 {
+			fail("usage: sbair-modem nickname <ICCID> [<NAME>]")
+		}
+		name := ""
+		if len(args) > 2 {
+			name = args[2]
+		}
+		emit(esimOp(ch, "esim_nickname", args[1], name))
 		return
 	case "enable", "disable", "delete":
 		if len(args) < 2 {
@@ -255,12 +265,14 @@ func usage() {
   sbair-modem enable  <ICCID> -y           enable a profile
   sbair-modem disable <ICCID> -y           disable a profile
   sbair-modem delete  <ICCID> -y           delete a profile (irreversible)
+  sbair-modem nickname <ICCID> [<NAME>]    name a profile (empty clears it)
   sbair-modem download <ACTIVATION-CODE|-> [-cc CODE] [-imei IMEI]
                                            install a profile (ES9+)
   sbair-modem discovery                    ES11 discovery (SM-DS)
   sbair-modem simmap [1|2]                 SIM mapping: show, or switch to
                                            1 = tray / 2 = built-in eSIM
   sbair-modem simlock [on|off]             SIM lock: show, or switch
+  sbair-modem reset                        modem reset (CFUN 0/1) and ifup wan
   sbair-modem apn [apply|probe]            APN: show / apply stored / ask the SIM
   sbair-modem gc                           reclaim leaked logical channels
   sbair-modem rpcd list|call <method>      rpcd backend (called by rpcd)

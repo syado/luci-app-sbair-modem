@@ -11,18 +11,6 @@ import (
 )
 
 // rpcd exec backend for the ubus object "sbair".
-//
-// rpcd runs this executable once per ubus call:
-//
-//	sbair list                 -> the method table, as JSON
-//	sbair call <method>        -> arguments as JSON on stdin, result on stdout
-//
-//   - **`list` must not touch the modem.** rpcd calls it at startup and again
-//     whenever a session's ACLs are enumerated. Opening the eUICC there would
-//     put a logical channel on the card every time somebody logs in to LuCI.
-//   - **Every call is a process, a flock and an AT session**, so the methods
-//     are coarse and the screens must not poll fast.
-//   - The eUICC is opened per method, never in main().
 
 // methods is the table handed to rpcd.
 //
@@ -38,6 +26,7 @@ var methods = map[string]map[string]any{
 	"esim_enable":   {"iccid": ""},
 	"esim_disable":  {"iccid": ""},
 	"esim_delete":   {"iccid": ""},
+	"esim_nickname": {"iccid": "", "nickname": ""},
 	"simmap_get":    {},
 	"simmap_set":    {"mapping": 0},
 	"simmap_status": {},
@@ -55,6 +44,9 @@ var methods = map[string]map[string]any{
 	"apn_delete": {"iccid": ""},
 	"apn_apply":  {},
 	"apn_probe":  {},
+	// モデムのリセット (AT+CFUN=0 → 1 → ifup wan)。30〜60 秒かかるので非同期。
+	"modem_reset":        {},
+	"modem_reset_status": {},
 }
 
 func cmdRPCD(args []string) int {
@@ -89,6 +81,7 @@ type rpcdArgs struct {
 	Password         string `json:"password"`
 	IPType           string `json:"iptype"`
 	Label            string `json:"label"`
+	Nickname         string `json:"nickname"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -138,6 +131,12 @@ func rpcdCall(method string) int {
 	case "simlock_set":
 		emit(startSimlock(in.On))
 		return 0
+	case "modem_reset_status":
+		emit(readJob("reset"))
+		return 0
+	case "modem_reset":
+		emit(startModemReset())
+		return 0
 	// UCI だけを触るものも AT を開かない。
 	case "apn_set":
 		emit(apnSet(apnEntry{ICCID: in.ICCID, APN: in.APN, Auth: in.Auth,
@@ -171,7 +170,8 @@ func rpcdCall(method string) int {
 		emit(apnStatus(ch))
 	case "apn_apply":
 		emit(apnApply(ch))
-	case "esim_status", "esim_list", "esim_enable", "esim_disable", "esim_delete":
+	case "esim_status", "esim_list", "esim_enable", "esim_disable", "esim_delete",
+		"esim_nickname":
 		// **Everything that opens a logical channel gets the long timeout**,
 		// esim_status included - it lists profiles too. A healthy card answers
 		// in well under a second, but enable and disable make it REFRESH, and
@@ -182,7 +182,7 @@ func rpcdCall(method string) int {
 		if method == "esim_status" {
 			emit(esimStatus(ch))
 		} else {
-			emit(esimOp(ch, method, in.ICCID))
+			emit(esimOp(ch, method, in.ICCID, in.Nickname))
 		}
 	}
 	return 0

@@ -13,7 +13,8 @@
 					"simlock_get",
 					"simlock_status",
 					"apn_status",
-					"apn_probe"
+					"apn_probe",
+					"modem_reset_status"
 				]
 			}
 		},
@@ -23,12 +24,14 @@
 					"esim_enable",
 					"esim_disable",
 					"esim_delete",
+					"esim_nickname",
 					"simmap_set",
 					"esim_download",
 					"simlock_set",
 					"apn_set",
 					"apn_delete",
-					"apn_apply"
+					"apn_apply",
+					"modem_reset"
 				]
 			}
 		}
