@@ -53,6 +53,9 @@ var methods = map[string]map[string]any{
 	"sms_import":   {},
 	"sms_sims":     {},
 	"sms_messages": {"iccid": "", "limit": 0},
+	// IMS。出荷状態では Off。SMS は IMS 経由で配送される。
+	"ims_status": {},
+	"ims_set":    {"on": false},
 	// 削除は保管庫とモデムの両方から消す。**取り消せない。**
 	"sms_delete": {"hash": ""},
 	"sms_purge":  {"iccid": ""},
@@ -184,6 +187,11 @@ func rpcdCall(method string) int {
 		emit(simMapping(ch))
 	case "simlock_get":
 		emit(simlockState(ch))
+	case "ims_status":
+		emit(imsStatus(ch))
+	case "ims_set":
+		ch.SetTimeout(30 * time.Second)
+		emit(imsSet(ch, in.On))
 	case "sms_status":
 		emit(smsStatus(ch))
 	case "sms_list":

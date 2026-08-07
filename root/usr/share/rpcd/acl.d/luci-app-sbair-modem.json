@@ -17,6 +17,7 @@
 					"modem_reset_status",
 					"sms_list",
 					"sms_status",
+					"ims_status",
 					"sms_sims",
 					"sms_messages"
 				]
@@ -38,7 +39,8 @@
 					"modem_reset",
 					"sms_import",
 					"sms_delete",
-					"sms_purge"
+					"sms_purge",
+					"ims_set"
 				]
 			}
 		}

@@ -164,6 +164,13 @@ func main() {
 		// 取り込みだけ CLI から使えるようにする。一覧は画面で見る。
 		emit(smsImport(ch))
 		return
+	case "ims":
+		if len(args) > 1 && (args[1] == "on" || args[1] == "off") {
+			emit(imsSet(ch, args[1] == "on"))
+			return
+		}
+		emit(imsStatus(ch))
+		return
 	case "reset":
 		// CLI では待って構わないので、ワーカーの中身をそのまま同期で回す。
 		ch.Disconnect() // ワーカーが lock を取れるように手放す
@@ -278,6 +285,7 @@ func usage() {
   sbair-modem simlock [on|off]             SIM lock: show, or switch
   sbair-modem reset                        modem reset (CFUN 0/1) and ifup wan
   sbair-modem sms                          import received SMS into the store
+  sbair-modem ims [on|off]                 IMS: show, or switch
   sbair-modem apn [apply|probe]            APN: show / apply stored / ask the SIM
   sbair-modem gc                           reclaim leaked logical channels
   sbair-modem rpcd list|call <method>      rpcd backend (called by rpcd)

@@ -14,6 +14,94 @@
 var callOverview    = rpc.declare({ object: 'sbair', method: 'overview' });
 var callResetStart  = rpc.declare({ object: 'sbair', method: 'modem_reset' });
 var callResetStatus = rpc.declare({ object: 'sbair', method: 'modem_reset_status' });
+var callImsStatus   = rpc.declare({ object: 'sbair', method: 'ims_status' });
+var callImsSet      = rpc.declare({ object: 'sbair', method: 'ims_set', params: [ 'on' ] });
+
+// IMS。**出荷状態ではモデム側で無効。** SMS は IMS 経由で配送されるので、
+// 未登録だと 1 通も届かない。
+//
+// ⚠ **判定に config の値を使わない。** モデムは登録しているのに
+// `ims_get_config` が Off を返すことがある(書く先と読む先が違うらしい)。
+// 真偽は AT+CIREG?、config は参考として小さく出すだけ。
+function imsSection(self) {
+	var d = self.data || {}, ims = d.ims || {};
+	var on = !!ims.registered;
+	var children = [];
+
+	if (d.imsBusy)
+		children.push(E('div', { 'class': 'alert-message' }, [
+			E('span', { 'class': 'spinning' }, ' '), '切り替えています…'
+		]));
+	else if (d.imsNote)
+		children.push(E('div', { 'class': 'alert-message success' }, d.imsNote));
+
+	children.push(sbair.table([
+		sbair.row('登録状態', on ? '登録済み' : '未登録',
+			on ? null : 'この状態では SMS が届きません'),
+		sbair.row('使えるサービス', (ims.services && ims.services.length)
+			? ims.services.join(' / ') : null),
+		sbair.row('+CIREG (生)', ims.cireg),
+		sbair.row('モデムの設定値', ims.config ? String(ims.config).trim() : null,
+			'参考値。登録状態と食い違うことがあります')
+	]));
+
+	children.push(E('div', {}, [
+		E('button', {
+			'class': 'cbi-button ' + (on ? 'cbi-button-remove' : 'cbi-button-action'),
+			'disabled': d.imsBusy ? '' : null,
+			'click': ui.createHandlerFn(self, function() { return self.setIms(!on); })
+		}, ims.config_on ? 'IMS を無効にする' : 'IMS を有効にする')
+	]));
+
+	children.push(E('div', { 'class': 'cbi-value-description' }, [
+		E('strong', {}, 'SMS は IMS 経由で配送されます。'),
+		' 未登録だと 1 通も届きません。出荷状態では無効です。',
+		E('br'),
+		'⚠ 再起動をまたぎません。そのつど入れ直してください。',
+		E('br'),
+		'⚠ このスイッチはモデムの VoLTE フラグです。未登録から有効にすると ' +
+		'10〜30 秒で登録しますが、登録済みの状態で無効にしても ' +
+		'登録と SMS over IMS は残ることがあります。'
+	]));
+
+	return sbair.section('IMS', children);
+}
+
+function resetSection(self) {
+	var job = self.data.reset || {};
+	var running = (job.state === 'running');
+	var children = [];
+
+	if (running) {
+		children.push(E('div', { 'class': 'alert-message' }, [
+			E('span', { 'class': 'spinning' }, ' '),
+			'リセット中: ' + (job.step || '') + ' — 30〜60 秒かかります。'
+		]));
+	} else if (job.state === 'error') {
+		children.push(E('div', { 'class': 'alert-message warning' },
+			(job.step ? job.step + ': ' : '') + (job.message || '失敗しました。')));
+	} else if (job.state === 'done') {
+		children.push(E('div', { 'class': 'alert-message success' },
+			job.message || '完了しました。'));
+	}
+
+	children.push(E('button', {
+		'class': 'cbi-button cbi-button-action',
+		'disabled': running ? '' : null,
+		'click': ui.createHandlerFn(self, 'confirmReset')
+	}, 'モデムをリセット'));
+
+	children.push(E('div', { 'class': 'cbi-value-description' }, [
+		'電波を落として上げ直し (AT+CFUN=0 → 1)、WAN を張り直します。',
+		E('br'),
+		E('strong', {}, 'データコールの失敗のしかたによってはモデム側のセッションが詰まり、' +
+			'netifd がいくら再試行しても上がらなくなることがあります。'),
+		' APN が正しいのに繋がらないときはこれで抜けられます。'
+	]));
+
+	return sbair.section('モデムのリセット', children);
+}
+
 function render(self) {
 	var data = self.data || {};
 	var body = [];
@@ -63,6 +151,7 @@ function render(self) {
 	signal.push(sbair.table(rows));
 	body.push(sbair.section('電波', signal));
 
+	body.push(imsSection(self));
 	body.push(resetSection(self));
 	body.push(sbair.errorBox(data.errors));
 	return body;
@@ -72,10 +161,12 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			callOverview().catch(function(err) { return { errors: [ String(err) ] }; }),
-			callResetStatus().catch(function() { return { state: 'idle' }; })
+			callResetStatus().catch(function() { return { state: 'idle' }; }),
+			callImsStatus().catch(function() { return {}; })
 		]).then(function(r) {
 			var d = r[0] || {};
 			d.reset = r[1];
+			d.ims = r[2];
 			return d;
 		});
 	},
@@ -119,6 +210,7 @@ return view.extend({
 				return;
 			return callOverview().then(function(res) {
 				res.reset = self.data.reset;
+				res.ims = self.data.ims;
 				self.data = res;
 				redraw();
 			}).catch(function() { /* 次の周期で復帰させる */ });
@@ -129,6 +221,40 @@ return view.extend({
 			sbair.revealToggle('識別子 (Cell ID) を表示する', redraw),
 			container
 		]);
+	},
+
+	// 有効化すると登録まで 10〜30 秒かかる。押しっぱなしに見えないよう、
+	// 切り替えた後に何度か読み直す。
+	setIms: function(on) {
+		var self = this;
+		self.data.imsBusy = true;
+		self.data.imsNote = null;
+		self.redraw();
+		return callImsSet(on).then(function(res) {
+			self.data.imsBusy = false;
+			if (res && res.error) {
+				ui.addNotification(null, E('p', {}, res.error), 'warning');
+				self.redraw();
+				return;
+			}
+			self.data.ims = res;
+			self.data.imsNote = res.note;
+			self.redraw();
+			if (!on) return;
+			var tries = 0;
+			self.imsWatch = function() {
+				return callImsStatus().then(function(s) {
+					self.data.ims = s;
+					self.redraw();
+					if (s.registered || ++tries >= 10) poll.remove(self.imsWatch);
+				}).catch(function() {});
+			};
+			poll.add(self.imsWatch, 3);
+		}).catch(function(e) {
+			self.data.imsBusy = false;
+			self.redraw();
+			ui.addNotification(null, E('p', {}, String(e)), 'warning');
+		});
 	},
 
 	confirmReset: function() {
