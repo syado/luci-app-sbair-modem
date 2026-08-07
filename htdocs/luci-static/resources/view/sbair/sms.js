@@ -72,6 +72,11 @@ function render(self) {
 	if (d.simsError)
 		body.push(E('div', { 'class': 'alert-message warning' }, d.simsError));
 
+	// 保管先まわりの注意。**出さないと気付けない類** — 保管先を変えたのに
+	// 中身を移していないと「SMS が全部消えた」ように見える(実際は置き去り)。
+	if (d.simsNote)
+		body.push(E('div', { 'class': 'alert-message warning' }, d.simsNote));
+
 	// --- 取り込み -----------------------------------------------------------
 	var st = d.status || {};
 	var imp = [];
@@ -101,6 +106,9 @@ function render(self) {
 	body.push(sbair.section('取り込み', imp));
 
 	// --- SIM の選択 ---------------------------------------------------------
+	if (sbair.isDebug() && d.smsDB)
+		body.push(E('div', { 'class': 'cbi-value-description' }, '保管先: ' + d.smsDB));
+
 	var sims = d.sims || [];
 	if (!sims.length) {
 		body.push(sbair.section('受信メッセージ', [
@@ -166,6 +174,7 @@ return view.extend({
 		]).then(function(r) {
 			var sims = (r[0] && r[0].sims) || [];
 			var d = { sims: sims, status: r[1], simsError: r[0] && r[0].error,
+			          simsNote: r[0] && r[0].note, smsDB: r[0] && r[0].db,
 			          messages: [], iccid: sims.length ? sims[0].iccid : null };
 			if (!d.iccid) return d;
 			return callMessages(d.iccid, 200).then(function(res) {

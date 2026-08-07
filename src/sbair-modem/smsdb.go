@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -26,20 +27,98 @@ import (
 // なので取り込みは `INSERT OR IGNORE`。同じメッセージを読み直しても
 // **未読の記録を後から書き換えない**。
 
-// **/data ではなく overlay に置く。** /data はベンダのログ置き場
-// (`/data/knos`, `/data/mdlog`) で、初期化の対象でもある。overlay 側は
-// `/etc/config/sbair` は再起動をまたいで残る。
-// 本文は数十 KB で、容量は問題にならない。
-const smsDBPath = "/etc/sbair/sms.db"
+// 保管先。既定は overlay の `/etc/sbair/sms.db`。**uci で変えられる。**
+//
+//	uci set sbair.sms=sms
+//	uci set sbair.sms.db=/data/sbair/sms.db
+//	uci commit sbair
+//	mv /etc/sbair/sms.db /data/sbair/sms.db      # ★ 自分で移すこと
+//
+// ⚠ **既定の置き場は、この機体でいちばん壊れやすい場所である。** 実測:
+//
+//	                       再起動   A/B 切替   rootfs を dd で焼き直す
+//	/etc (overlay)         残る     消える     消える
+//	/data (user_data)      残る     残る       残る
+//
+// overlay は **rootfs パーティションの中**にあるので、その面を焼くと消える
+// (sbair6-rs の docs/STRIP_STOCK_UI.md §7-1)。この DB は
+// 「モデムの保存領域は溢れれば消える」「`AT+CMGL` が未読を既読に変える」から
+// 作ったものなので、**本当はモデムより長く持つ場所に置きたい。**
+//
+// **それでも既定を `/etc` のままにしてある。** `/data` はベンダ領域
+// (`/data/knos`, `/data/mdlog`) で、**工場出荷リセットでどうなるかを
+// 確かめていない**ため。確かめたら既定を変えてよい。
+//
+// ⚠ **自動移行はしない。** 黙って動かすと、どちらが本物か分からなくなる。
+// 代わりに、置き去りになった既定の DB があれば警告する。
+const smsDBDefault = "/etc/sbair/sms.db"
+
+var (
+	smsDBOnce     sync.Once
+	smsDBResolved string
+	smsDBNote     string // 画面に出す注意書き。空なら何も無い
+)
+
+// smsDBFile resolves the configured database path.
+//
+// ⚠ **相対パスは受けない。** rpcd から呼ばれるときの作業ディレクトリは
+// 何も保証されないので、相対で受けると呼ばれ方によって別のファイルを開く。
+func smsDBFile() string {
+	smsDBOnce.Do(func() {
+		smsDBResolved = smsDBDefault
+
+		p := strings.TrimSpace(os.Getenv("SBAIR_SMS_DB"))
+		if p == "" {
+			if v, err := uci("get", "sbair.sms.db"); err == nil {
+				p = strings.TrimSpace(v)
+			}
+		}
+		if p == "" {
+			return
+		}
+		if !filepath.IsAbs(p) {
+			smsDBWarn("SMS の保管先 %q は絶対パスでないので使いません。%s を使います。",
+				p, smsDBDefault)
+			return
+		}
+		smsDBResolved = p
+
+		// 既定の場所に古い DB が残っていたら言う。**移し忘れると
+		// 「SMS が全部消えた」ように見える**が、実際には置き去りなだけ。
+		if p != smsDBDefault {
+			if _, err := os.Stat(smsDBDefault); err == nil {
+				smsDBWarn("以前の保管庫 %s が残っています。中身は引き継がれないので、"+
+					"要るなら手で %s へ移してください。", smsDBDefault, p)
+			}
+		}
+	})
+	return smsDBResolved
+}
+
+// smsDBWarn records a warning and prints it.
+//
+// ⚠ **`slog` を使わないこと。** 既定のハンドラは `-v` を付けないと
+// `io.Discard` に捨てる(stdout を JSON に保つため)ので、**警告が
+// 誰にも届かない**。実際にこれで「警告を出したつもり」になっていた。
+// 画面にも出せるよう note にも積む。
+func smsDBWarn(format string, a ...any) {
+	msg := fmt.Sprintf(format, a...)
+	if smsDBNote != "" {
+		smsDBNote += " "
+	}
+	smsDBNote += msg
+	fmt.Fprintln(os.Stderr, "sbair-modem: "+msg)
+}
 
 // 純 Go の SQLite (modernc.org/sqlite) を使う。**CGO は使えない** —
 // この機体向けは CGO_ENABLED=0 の静的ビルドが前提で、`libsqlite3.so` に
 // 動的リンクするとその前提が崩れる。バイナリは 6.1 MB → 10.4 MB になる。
 func openSMSDB() (*sql.DB, error) {
-	if err := os.MkdirAll(filepath.Dir(smsDBPath), 0755); err != nil {
+	path := smsDBFile()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", smsDBPath+"?_pragma=busy_timeout(5000)")
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +269,11 @@ func smsSIMs() map[string]any {
 			"last_seen": lastSeen, "count": count, "unread": unread,
 		})
 	}
-	return map[string]any{"sims": sims}
+	out := map[string]any{"sims": sims, "db": smsDBFile()}
+	if smsDBNote != "" {
+		out["note"] = smsDBNote
+	}
+	return out
 }
 
 // smsMessages returns the stored messages of one SIM, newest first.

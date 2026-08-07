@@ -62,6 +62,25 @@ mkdir -p "$ROOT/etc/rc.d"
 ln -sf ../init.d/sbair-apn "$ROOT/etc/rc.d/S95sbair-apn"
 ln -sf ../init.d/sbair-apn "$ROOT/etc/rc.d/K01sbair-apn"
 
+# sysupgrade で持ち越す物の登録。
+#
+# **これが無いと、正規の更新手順でも APN と SMS が消える。** OpenWrt は
+# `/lib/upgrade/keep.d/<pkg>` に書かれたパスだけを引き継ぐ。この機体でも
+# busybox / collectd / dnsmasq / opkg が同じ形で登録している。
+#
+# ⚠ **これは sysupgrade 経路にしか効かない。** rootfs パーティションを
+# `dd` で直接焼くときは overlay ごと消えるので、**別途 tar で退避すること**
+# (sbair6-rs の docs/STRIP_STOCK_UI.md §7-1)。実際に一度これで消した。
+#
+# ⚠ **SMS の DB を uci で別の場所へ移したら、その行もここに足すこと。**
+# 既定 (`/etc/sbair/`) 以外は当然ここには載っていない。
+mkdir -p "$ROOT/lib/upgrade/keep.d"
+cat > "$ROOT/lib/upgrade/keep.d/luci-app-sbair-modem" <<'EOF'
+/etc/config/sbair
+/etc/sbair/
+EOF
+chmod 0644 "$ROOT/lib/upgrade/keep.d/luci-app-sbair-modem"
+
 echo "配置した: $ROOT"
 
 # ベンダの libqlnet / libqlril が /etc/config/ql_ril_service を読んで log_level を
