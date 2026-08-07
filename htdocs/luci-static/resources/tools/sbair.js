@@ -36,11 +36,21 @@ return baseclass.extend({
 		return s.slice(0, 4) + '*'.repeat(s.length - 6) + s.slice(-2);
 	},
 
+	// ⚠ **値を無条件に String() しないこと。** 呼び出し側はバッジの並びなど
+	// DOM ノードも渡す。文字列化すると `[object HTMLSpanElement]` が並ぶ
+	// (実際にバンドの行でこれを出した)。ノードはそのまま通す。
 	row: function(label, value, extra) {
+		var v;
+		if (value === undefined || value === null || value === '')
+			v = '-';
+		else if (typeof Node === 'function' && value instanceof Node)
+			v = value;
+		else
+			v = String(value);
 		return E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td left', 'width': '35%' }, label),
 			E('td', { 'class': 'td left' }, [
-				(value === undefined || value === null || value === '') ? '-' : String(value),
+				v,
 				extra ? E('span', { 'class': 'ifacebadge', 'style': 'margin-left:.5em' }, extra) : ''
 			])
 		]);
@@ -74,9 +84,8 @@ return baseclass.extend({
 	// LuCI が持っている signal-*.png をそのまま使うので追加の画像は要らない。
 	//
 	// **セルラーには「品質 %」が無い。** Wi-Fi は signal/noise から出せるが、
-	// こちらは RSRP を段階に割り当てるしかない。-110 dBm を
-	// 下限、-80 dBm を上限とする(この機体で au 在圏時 -76 dBm、SoftBank の
-	// 圏外気味のセルで -111 dBm だった)。
+	// こちらは RSRP を段階に割り当てるしかない。-110 dBm を下限、
+	// -80 dBm を上限とする。
 	signalPercent: function(dbm) {
 		var v = parseFloat(dbm);
 		if (isNaN(v))
