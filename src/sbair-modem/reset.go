@@ -59,7 +59,7 @@ func runResetWorker() int {
 		}
 	}
 
-	j.step("在圏を待つ")
+	j.step("ネットワークへの登録を待つ")
 	registered := false
 	for waited := time.Duration(0); waited < resetPollMax; waited += resetPoll {
 		time.Sleep(resetPoll)
@@ -74,7 +74,7 @@ func runResetWorker() int {
 			continue
 		}
 		f := splitAT(v)
-		// 読み取り応答は <n>,<stat>,… 。1 = 在圏 / 5 = ローミング。
+		// 読み取り応答は <n>,<stat>,… 。1 = 登録済み / 5 = ローミング。
 		if len(f) >= 2 && (f[1] == "1" || f[1] == "5") {
 			registered = true
 			break
@@ -83,10 +83,10 @@ func runResetWorker() int {
 	ch.Disconnect() // ifup の先で ql_datacall が AT を使う。握ったままにしない。
 
 	if !registered {
-		// **ここで諦めない。** 在圏していなくても WAN を戻しておかないと、
+		// **ここで諦めない。** ネットワークにつながっていなくても WAN を戻しておかないと、
 		// 「リセットしたら余計に繋がらなくなった」状態で放置される。
 		_, _ = exec.Command("ifup", "wan").CombinedOutput()
-		return j.fail("在圏", "電波は戻しましたが、時間内に在圏しませんでした。WAN は起動しています。")
+		return j.fail("登録", "電波は戻しましたが、時間内にネットワークにつながりませんでした。WAN は起動しています。")
 	}
 
 	j.step("WAN を張り直す")

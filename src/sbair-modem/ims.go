@@ -73,7 +73,7 @@ func imsStatus(ch *ATChannel) map[string]any {
 // imsSet turns the modem's IMS stack on or off.
 //
 // **再起動はまたぐ。** 効かなくなるのは設定を初期化したときで、
-// そのとき SIM ロックが出荷既定へ戻り、在圏しないので IMS も登録できない。
+// そのとき SIM ロックが出荷既定へ戻り、圏外になるので IMS も登録できない。
 // (SIM ロックを解除すれば戻る)
 func imsSet(ch *ATChannel, on bool) map[string]any {
 	arg := "0"
