@@ -2,14 +2,17 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 soralis0912
 #
-# 起動時に、いま刺さっている SIM の ICCID に対応する APN を network.wan へ流す。
-# 無いと再起動のたびにベンダの値へ戻る (→ docs/API.md)。
+# 起動時に、いま刺さっている SIM に必要な設定を一括で当てる。
+#   - APN を network.wan へ流す (無いと再起動のたびにベンダの値へ戻る)
+#   - 登録で求められていれば SIM ロックの解除と IMS の有効化
+#   - 受信 SMS を保存させる AT+CNMI
+# → docs/API.md
 
 START=95
 STOP=01
 
 EXTRA_COMMANDS="apply_now"
-EXTRA_HELP="	apply_now	SIM を待ってから保存済み APN を流す (boot から使う)"
+EXTRA_HELP="	apply_now	SIM を待ってから保存済みの設定を当てる (boot から使う)"
 
 apply_now() {
 	# モデムが SIM を読み終えるまで待つ。起動直後は atcid がまだ上がって
@@ -18,12 +21,9 @@ apply_now() {
 		[ -n "$(/usr/bin/sbair-modem at 'AT+CCID' 2>/dev/null)" ] && break
 		sleep 2
 	done
-	/usr/bin/sbair-modem apn apply 2>&1 | logger -t sbair-apn
-
-	# 受信 SMS をモデムに保存させる。**再起動で 0,0,0,0,0 に戻る。**
-	# 既定でも保存はされるはずだが (TS 27.007 の <mt>=0 は「通知しない」だけ)、
-	# この機体では確かめられていない。保存する側に倒しておく。
-	/usr/bin/sbair-modem at 'AT+CNMI=1,1,0,0,0' >/dev/null 2>&1
+	# `boot` は APN に加えて、SIM ロックの解除と IMS の有効化、AT+CNMI まで
+	# 面倒を見る。**解除は 40〜60 秒かかるので、必要なときだけ動く。**
+	/usr/bin/sbair-modem boot 2>&1 | logger -t sbair-apn
 }
 
 boot() {
@@ -35,5 +35,5 @@ boot() {
 }
 
 start() {
-	/usr/bin/sbair-modem apn apply
+	/usr/bin/sbair-modem boot
 }

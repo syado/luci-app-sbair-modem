@@ -63,6 +63,12 @@ type apnEntry struct {
 	Password string `json:"password,omitempty"`
 	IPType   string `json:"iptype,omitempty"`
 	Label    string `json:"label,omitempty"`
+	// **この SIM を使うのに必要なモデム側の状態。** APN と一緒に持っておき、
+	// 適用のたびに揃える。どちらも overlay が新しくなると出荷既定へ戻る
+	// (SIM ロックは `modeswitch.common.sim_lock` 由来) ので、
+	// 起動時の適用でそこを埋める。
+	Unlock string `json:"unlock,omitempty"` // "1" で SIM ロックを解除しておく
+	IMS    string `json:"ims,omitempty"`    // "1" で IMS を有効にしておく
 }
 
 func apnGet(iccid string) (apnEntry, bool) {
@@ -75,6 +81,7 @@ func apnGet(iccid string) (apnEntry, bool) {
 		ICCID: iccid, APN: get("apn"), Auth: get("auth"),
 		Username: get("username"), Password: get("password"),
 		IPType: get("iptype"), Label: get("label"),
+		Unlock: get("unlock"), IMS: get("ims"),
 	}, true
 }
 
@@ -120,6 +127,7 @@ func apnSet(e apnEntry) map[string]any {
 		"iccid": e.ICCID, "apn": e.APN, "auth": e.Auth,
 		"username": e.Username, "password": e.Password,
 		"iptype": e.IPType, "label": e.Label,
+		"unlock": e.Unlock, "ims": e.IMS,
 	} {
 		if v == "" {
 			_, _ = uci("delete", sec+"."+k)
@@ -268,7 +276,46 @@ func applyToLTE(e apnEntry) {
 //
 // **何も設定が無いときは触らない。** 空の APN を書き込むと、ベンダの
 // `check_auto_apn_prov`(SIM から APN を引く仕組み)まで潰しかねない。
-func apnApply(ch *ATChannel) map[string]any {
+// ensureModemState brings the modem to what the entry asks for.
+//
+// **どちらも「今そうでないときだけ」動かす。** SIM ロックの解除は 40〜60 秒
+// かかり電波を落とすので、既に解除済みなら触ってはいけない。
+//
+// `slow` が false のときは重い操作をしない — 画面からの適用で 1 分待たせない
+// ため。起動時 (`sbair-modem boot`) だけ true で呼ぶ。
+func ensureModemState(ch *ATChannel, e apnEntry, slow bool) []string {
+	var notes []string
+
+	if e.Unlock == "1" {
+		st := simlockState(ch)
+		if locked, ok := st["locked"].(bool); ok && locked {
+			if !slow {
+				notes = append(notes, "SIM ロックが掛かっています。SIM のページから解除してください。")
+			} else {
+				notes = append(notes, "SIM ロックを解除しました。")
+				runSimlockWorker("off")
+			}
+		}
+	}
+
+	if e.IMS == "1" {
+		// **判定は AT+CIREG。** `--ims_get_config` は登録していても Off を
+		// 返すことがあるので当てにしない。
+		if st := imsStatus(ch); st["registered"] != true {
+			if out := imsSet(ch, true); out["error"] == nil {
+				notes = append(notes, "IMS を有効にしました。登録まで 10〜30 秒かかります。")
+			}
+		}
+	}
+	return notes
+}
+
+func apnApply(ch *ATChannel) map[string]any { return apnApplyMode(ch, false) }
+
+// apnApplyBoot is the boot path: 重い操作もここでは待つ。
+func apnApplyBoot(ch *ATChannel) map[string]any { return apnApplyMode(ch, true) }
+
+func apnApplyMode(ch *ATChannel, slow bool) map[string]any {
 	iccid := currentICCID(ch)
 	if iccid == "" {
 		return map[string]any{"error": "SIM の ICCID を読めません。"}
@@ -278,6 +325,10 @@ func apnApply(ch *ATChannel) map[string]any {
 		return map[string]any{"result": "skipped", "iccid": iccid,
 			"note": "この SIM の APN は登録されていません。WAN は変更していません。"}
 	}
+
+	// **APN を書く前にモデムの状態を揃える。** 解除は電波を落とすので、
+	// 先に ifup してしまうとそこで切れる。
+	notes := ensureModemState(ch, e, slow)
 
 	set := func(k, v string) {
 		if v == "" {
@@ -325,6 +376,7 @@ func apnApply(ch *ATChannel) map[string]any {
 		return map[string]any{"error": fmt.Sprintf("ifup wan: %v: %s",
 			err, strings.TrimSpace(string(out)))}
 	}
+	notes = append(notes, "WAN を張り直しました。接続まで 10〜30 秒かかります。")
 	return map[string]any{"result": "ok", "iccid": iccid, "apn": e.APN,
-		"note": "WAN を張り直しました。接続まで 10〜30 秒かかります。"}
+		"note": strings.Join(notes, " ")}
 }

@@ -40,7 +40,7 @@ var methods = map[string]map[string]any{
 	// APN。ICCID をキーに /etc/config/sbair へ保存する。
 	"apn_status": {},
 	"apn_set": {"iccid": "", "apn": "", "auth": "", "username": "",
-		"password": "", "iptype": "", "label": ""},
+		"password": "", "iptype": "", "label": "", "unlock": "", "ims": ""},
 	"apn_delete": {"iccid": ""},
 	"apn_apply":  {},
 	"apn_probe":  {},
@@ -96,6 +96,8 @@ type rpcdArgs struct {
 	Nickname         string `json:"nickname"`
 	Limit            int    `json:"limit"`
 	Hash             string `json:"hash"`
+	Unlock           string `json:"unlock"`
+	IMS              string `json:"ims"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -155,7 +157,8 @@ func rpcdCall(method string) int {
 	case "apn_set":
 		emit(apnSet(apnEntry{ICCID: in.ICCID, APN: in.APN, Auth: in.Auth,
 			Username: in.Username, Password: in.Password,
-			IPType: in.IPType, Label: in.Label}))
+			IPType: in.IPType, Label: in.Label,
+			Unlock: in.Unlock, IMS: in.IMS}))
 		return 0
 	case "apn_delete":
 		emit(apnDelete(in.ICCID))

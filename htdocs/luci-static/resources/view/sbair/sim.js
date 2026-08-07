@@ -24,7 +24,8 @@ var callLockStat  = rpc.declare({ object: 'sbair', method: 'simlock_status' });
 var callApnStatus = rpc.declare({ object: 'sbair', method: 'apn_status' });
 var callApnSet    = rpc.declare({ object: 'sbair', method: 'apn_set',
                                   params: [ 'iccid', 'apn', 'auth', 'username',
-                                            'password', 'iptype', 'label' ] });
+                                            'password', 'iptype', 'label',
+                                            'unlock', 'ims' ] });
 var callApnApply  = rpc.declare({ object: 'sbair', method: 'apn_apply' });
 var callApnDelete = rpc.declare({ object: 'sbair', method: 'apn_delete', params: [ 'iccid' ] });
 var callApnProbe  = rpc.declare({ object: 'sbair', method: 'apn_probe' });
@@ -333,6 +334,17 @@ return view.extend({
 			]);
 		};
 
+		var check = function(key, label, on, desc) {
+			f[key] = E('input', { 'type': 'checkbox', 'checked': on ? '' : null });
+			return E('div', { 'class': 'cbi-value' }, [
+				E('label', { 'class': 'cbi-value-title' }, label),
+				E('div', { 'class': 'cbi-value-field' }, [
+					f[key],
+					E('div', { 'class': 'cbi-value-description' }, desc)
+				])
+			]);
+		};
+
 		children.push(sbair.table([
 			sbair.row('対象の SIM', sbair.mask(a.iccid)),
 			sbair.row('現在の WAN', (a.wan && a.wan.apn) ? a.wan.apn : null,
@@ -356,10 +368,19 @@ return view.extend({
 		children.push(field('username', 'ユーザ名', e.username));
 		children.push(field('password', 'パスワード', e.password, '', 'password'));
 
+		// **この SIM を使うのに要るモデム側の状態を、APN と一緒に持つ。**
+		// 適用のたびに揃えるので、設定が出荷既定へ戻っても起動時に元に戻る。
+		children.push(check('unlock', 'SIM ロックを解除しておく', e.unlock == '1',
+			'他社の SIM で在圏するのに要ります。掛かっているときだけ動き、' +
+			'そのときは電波を 40〜60 秒止めます。'));
+		children.push(check('ims', 'IMS を有効にしておく', e.ims == '1',
+			'SMS は IMS 経由で配送されます。未登録だと 1 通も届きません。'));
+
 		var save = function(apply) {
 			return callApnSet(a.iccid, (f.apn.value || '').trim(),
 				f.auth.value, (f.username.value || '').trim(),
-				f.password.value || '', '', (f.label.value || '').trim()
+				f.password.value || '', '', (f.label.value || '').trim(),
+				f.unlock.checked ? '1' : '0', f.ims.checked ? '1' : '0'
 			).then(function(res) {
 				if (res && res.error) {
 					ui.addNotification(null, E('p', {}, res.error), 'warning');

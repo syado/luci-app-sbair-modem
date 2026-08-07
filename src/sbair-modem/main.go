@@ -140,8 +140,12 @@ func main() {
 	case "overview":
 		emit(collectOverview(ch))
 		return
+	case "boot":
+		// 起動時の一括適用 (init.d/sbair-apn)。**重い操作もここでは待つ。**
+		emit(apnApplyBoot(ch))
+		_, _ = ch.Command("AT+CNMI=1,1,0,0,0")
+		return
 	case "apn":
-		// 起動時の自動適用に使う (init.d/sbair-apn)。
 		if len(args) > 1 && args[1] == "apply" {
 			emit(apnApply(ch))
 			return
@@ -287,6 +291,7 @@ func usage() {
   sbair-modem sms                          import received SMS into the store
   sbair-modem ims [on|off]                 IMS: show, or switch
   sbair-modem apn [apply|probe]            APN: show / apply stored / ask the SIM
+  sbair-modem boot                         apply everything this SIM needs (boot)
   sbair-modem gc                           reclaim leaked logical channels
   sbair-modem rpcd list|call <method>      rpcd backend (called by rpcd)
 

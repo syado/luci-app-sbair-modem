@@ -42,6 +42,27 @@ sbair call <method>     → 引数を JSON で stdin、結果を stdout
 | `apn_set` | `iccid` `apn` `auth` `username` `password` `iptype` `label` | 保存 |
 | `apn_delete` | `iccid` | 削除 |
 | `apn_apply` | — | 今の SIM に対応するものを `network.wan` **と `/etc/config/lte`** へ流して `ifup wan` |
+
+#### この SIM に要るモデム側の状態も一緒に持つ
+
+`unlock` と `ims` を APN の登録に持たせてある。**適用のたびに揃える。**
+
+| | |
+|---|---|
+| `unlock` | `1` なら SIM ロックを解除しておく |
+| `ims` | `1` なら IMS を有効にしておく |
+
+> **どちらも「今そうでないときだけ」動く。** SIM ロックの解除は 40〜60 秒かかり
+> 電波を落とすので、既に解除済みなら触らない。整っていれば `boot` は 0.3 秒で終わる。
+
+> ⚠ **重い操作は起動経路だけ。** `apn_apply`(画面から)は SIM ロックが
+> 掛かっていても解除せず、注意書きを返すだけにする — 画面を 1 分待たせないため。
+> `sbair-modem boot`(`init.d/sbair-apn` が呼ぶ)は待つ。
+
+> **通常の再起動ではどちらも消えない**(SIM ロックは `modeswitch.common.sim_lock`、
+> IMS はモデム側に残る)。**戻るのは overlay が新しくなったとき**で、
+> そのとき SIM ロックが出荷既定の「掛かっている」に戻り、
+> 在圏しなくなって IMS も登録できなくなる。この仕組みはそこを埋める。
 | `apn_probe` | — | **SIM に APN を聞く。**提案を返すだけで保存も適用もしない |
 
 > ⚠ **`apn_apply` が `/etc/config/lte` も書くのは必須。** ベンダの `/usr/bin/knsh` が
