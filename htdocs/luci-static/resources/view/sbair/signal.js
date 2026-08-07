@@ -37,15 +37,20 @@ function imsSection(self) {
 	else if (d.imsNote)
 		children.push(E('div', { 'class': 'alert-message success' }, d.imsNote));
 
-	children.push(sbair.table([
+	var rows = [
 		sbair.row('登録状態', on ? '登録済み' : '未登録',
 			on ? null : 'この状態では SMS が届きません'),
 		sbair.row('使えるサービス', (ims.services && ims.services.length)
 			? ims.services.join(' / ') : null),
-		sbair.row('+CIREG (生)', ims.cireg),
-		sbair.row('モデムの設定値', ims.config ? String(ims.config).trim() : null,
-			'参考値。登録状態と食い違うことがあります')
-	]));
+	];
+	// **生の応答と参考値はデバッグ表示のときだけ。** 参考値は登録状態と
+	// 食い違うことがあり、並べると「どちらが本当か」を迷わせる。
+	if (sbair.isDebug())
+		rows.push(
+			sbair.row('+CIREG (生)', ims.cireg),
+			sbair.row('モデムの設定値', ims.config ? String(ims.config).trim() : null,
+				'参考値。登録状態と食い違うことがあります'));
+	children.push(sbair.table(rows));
 
 	children.push(E('div', {}, [
 		E('button', {
@@ -174,12 +179,14 @@ function bandSection(self) {
 		rows.push(sbair.row('LTE', lte));
 	if (nr)
 		rows.push(sbair.row('5G NR', nr));
-	if (b.dmfapp)
-		rows.push(sbair.row('+EDMFAPP 6,3 (生)', b.dmfapp));
-	if (b.ecbdinfo)
-		rows.push(sbair.row('+ECBDINFO (生)', b.ecbdinfo));
-	if (b.epbseh)
-		rows.push(sbair.row('+EPBSEH (生)', b.epbseh));
+	if (sbair.isDebug()) {
+		if (b.dmfapp)
+			rows.push(sbair.row('+EDMFAPP 6,3 (生)', b.dmfapp));
+		if (b.ecbdinfo)
+			rows.push(sbair.row('+ECBDINFO (生)', b.ecbdinfo));
+		if (b.epbseh)
+			rows.push(sbair.row('+EPBSEH (生)', b.epbseh));
+	}
 	children.push(sbair.table(rows));
 
 	var dirty = !sameSet(self.bandSel.lte, self.bandApplied.lte) ||
@@ -347,7 +354,7 @@ function render(self) {
 	if (data.signal_note)
 		rows.push(sbair.row('注記', data.signal_note));
 	// 規格外の余りフィールドは意味を確かめていないので生で出す。
-	if (data.cesq)
+	if (sbair.isDebug() && data.cesq)
 		rows.push(sbair.row('+CESQ (生)', data.cesq));
 
 	// **ネットワークに登録されていないときに素の数字だけ出さない。**
@@ -467,7 +474,8 @@ return view.extend({
 		return E('div', { 'class': 'cbi-map' }, [
 			status,
 			sbair.revealToggle('識別子 (Cell ID) を表示する', redraw),
-			container
+			container,
+			sbair.debugToggle(redraw)
 		]);
 	},
 

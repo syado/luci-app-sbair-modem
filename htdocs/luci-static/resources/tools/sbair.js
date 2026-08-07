@@ -11,6 +11,10 @@
 // タブをまたいで同じ状態を使う。
 var revealed = false;
 
+// AT の生の応答は既定で伏せる。**普段の画面では読まないし、解釈済みの値と
+// 並ぶと「どちらが本当か」を迷わせる。** 見たいときだけ出す。
+var debugMode = false;
+
 // セクションの余白。**1 回だけ差し込む。** node で描画を試すときは
 // document が無いので、その場合は何もしない。
 var sectionStyled = false;
@@ -32,6 +36,28 @@ return baseclass.extend({
 
 	setRevealed: function(v) {
 		revealed = !!v;
+	},
+
+	isDebug: function() {
+		return debugMode;
+	},
+
+	// 生の応答の表示切替。**画面のいちばん下に置く** — 普段は使わないので。
+	debugToggle: function(redraw) {
+		return E('label', {
+			'style': 'display:block;margin-top:2em;opacity:.7;font-size:90%'
+		}, [
+			E('input', {
+				'type': 'checkbox',
+				'class': 'cbi-input-checkbox',
+				'checked': debugMode ? '' : null,
+				'change': function(ev) {
+					debugMode = ev.target.checked;
+					redraw();
+				}
+			}),
+			' デバッグ表示 (AT の生の応答を出す)'
+		]);
 	},
 
 	// **短いものほど伏せる必要がある。** Cell ID はちょうど 8 文字なので、
