@@ -3,7 +3,7 @@
 # Copyright (c) 2026 soralis0912
 # install.sh — root/ と htdocs/ を配置し、out/sbair-modem を入れる。
 #
-#   ./install.sh <展開済み rootfs ツリー>     イメージに焼き込む
+#   ./install.sh <展開済み rootfs ツリー>     ツリーへ導入する
 #   ./install.sh /                            動いている実機に直接
 #
 # ⚠ **`install(1)` を使わない。** この機体の busybox に applet が無く、
