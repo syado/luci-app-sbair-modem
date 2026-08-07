@@ -53,6 +53,9 @@ var methods = map[string]map[string]any{
 	"sms_import":   {},
 	"sms_sims":     {},
 	"sms_messages": {"iccid": "", "limit": 0},
+	// 削除は保管庫とモデムの両方から消す。**取り消せない。**
+	"sms_delete": {"hash": ""},
+	"sms_purge":  {"iccid": ""},
 }
 
 func cmdRPCD(args []string) int {
@@ -89,6 +92,7 @@ type rpcdArgs struct {
 	Label            string `json:"label"`
 	Nickname         string `json:"nickname"`
 	Limit            int    `json:"limit"`
+	Hash             string `json:"hash"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -189,6 +193,13 @@ func rpcdCall(method string) int {
 	case "sms_import":
 		ch.SetTimeout(30 * time.Second)
 		emit(smsImport(ch))
+	case "sms_delete":
+		ch.SetTimeout(30 * time.Second)
+		emit(smsDelete(ch, in.Hash))
+	case "sms_purge":
+		// 70 通ぶんの AT+CMGD が並びうる。
+		ch.SetTimeout(60 * time.Second)
+		emit(smsPurge(ch, in.ICCID))
 	case "apn_status":
 		emit(apnStatus(ch))
 	case "apn_apply":

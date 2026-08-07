@@ -36,7 +36,9 @@
 					"apn_delete",
 					"apn_apply",
 					"modem_reset",
-					"sms_import"
+					"sms_import",
+					"sms_delete",
+					"sms_purge"
 				]
 			}
 		}

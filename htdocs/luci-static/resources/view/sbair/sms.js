@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 soralis0912
 //
-// 受信 SMS。SIM (電話番号) ごとに保管庫を見る。読むだけで、送信はしない。
+// 受信 SMS。SIM (電話番号) ごとに保管庫を見る。受信と削除だけで、送信はしない。
 
 'use strict';
 'require view';
@@ -15,6 +15,8 @@ var callSims     = rpc.declare({ object: 'sbair', method: 'sms_sims' });
 var callMessages = rpc.declare({ object: 'sbair', method: 'sms_messages', params: [ 'iccid', 'limit' ] });
 var callImport   = rpc.declare({ object: 'sbair', method: 'sms_import' });
 var callStatus   = rpc.declare({ object: 'sbair', method: 'sms_status' });
+var callDelete   = rpc.declare({ object: 'sbair', method: 'sms_delete', params: [ 'hash' ] });
+var callPurge    = rpc.declare({ object: 'sbair', method: 'sms_purge', params: [ 'iccid' ] });
 
 // 受信時刻は網が付けたもので、タイムゾーンごと来る。**端末の時計に寄せない。**
 function when(iso) {
@@ -31,7 +33,7 @@ function simLabel(s) {
 	return '番号なし (' + sbair.mask(s.iccid) + ')';
 }
 
-function message(m) {
+function message(self, m) {
 	var head = [
 		E('strong', {}, sbair.mask(m.from) || '(送信者不明)'),
 		E('span', { 'style': 'color:#888;margin-left:1em' }, when(m.time))
@@ -51,6 +53,12 @@ function message(m) {
 		body.push(E('div', { 'class': 'alert-message warning', 'style': 'margin:.3em 0' },
 			'分割の ' + m.missing.join(', ') + ' 番目が届いていません。本文が欠けています。'));
 	body.push(E('div', { 'style': 'white-space:pre-wrap;word-break:break-word' }, m.text || ''));
+
+	if (m.hash)
+		body.push(E('div', { 'style': 'margin-top:.4em' }, E('button', {
+			'class': 'cbi-button cbi-button-remove',
+			'click': ui.createHandlerFn(self, function() { return self.confirmDelete(m); })
+		}, '削除')));
 
 	return E('div', {
 		'style': 'padding:.6em .2em;border-top:1px solid rgba(128,128,128,.3)'
@@ -132,7 +140,18 @@ function render(self) {
 		list.push(E('div', { 'class': 'cbi-value-description' },
 			'この SIM のメッセージはありません。'));
 	else
-		msgs.forEach(function(m) { list.push(message(m)); });
+		msgs.forEach(function(m) { list.push(message(self, m)); });
+
+	if (msgs.length)
+		list.push(E('div', { 'style': 'margin-top:1em;padding-top:.6em;' +
+			'border-top:1px solid rgba(128,128,128,.3)' }, [
+			E('button', {
+				'class': 'cbi-button cbi-button-negative',
+				'click': ui.createHandlerFn(self, 'confirmPurge')
+			}, 'この SIM の全件を削除'),
+			E('div', { 'class': 'cbi-value-description' },
+				'保管庫から消し、あわせてモデムの保存領域も空にします。取り消せません。')
+		]));
 
 	body.push(sbair.section('受信メッセージ', list));
 	return body;
@@ -222,6 +241,76 @@ return view.extend({
 			self.redraw();
 			ui.addNotification(null, E('p', {}, String(e)), 'warning');
 		});
+	},
+
+	// **削除は取り消せない。** 保管庫とモデムの両方から消す — 片方だけだと
+	// 次の取り込みで戻ってくる。
+	confirmDelete: function(m) {
+		var self = this;
+		return ui.showModal('メッセージの削除', [
+			E('p', {}, '次のメッセージを保管庫とモデムの両方から削除します。'),
+			E('div', { 'style': 'margin:.5em 0;padding:.5em;' +
+				'background:rgba(128,128,128,.1);white-space:pre-wrap;' +
+				'max-height:8em;overflow:auto' }, m.text || ''),
+			E('p', {}, E('strong', {}, '取り消せません。')),
+			E('div', { 'class': 'right' }, [
+				E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, 'やめる'),
+				' ',
+				E('button', {
+					'class': 'cbi-button cbi-button-negative',
+					'click': ui.createHandlerFn(self, function() {
+						return callDelete(m.hash).then(function(res) {
+							ui.hideModal();
+							return self.afterDelete(res);
+						});
+					})
+				}, '削除する')
+			])
+		]);
+	},
+
+	confirmPurge: function() {
+		var self = this;
+		var cur = (self.data.sims || []).filter(function(s) {
+			return s.iccid == self.data.iccid;
+		})[0] || {};
+		return ui.showModal('この SIM の全件を削除', [
+			E('p', {}, (cur.count || 0) + ' 通すべてを保管庫から削除し、モデムの保存領域も空にします。'),
+			E('p', {}, E('strong', {}, '取り消せません。')),
+			E('div', { 'class': 'right' }, [
+				E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, 'やめる'),
+				' ',
+				E('button', {
+					'class': 'cbi-button cbi-button-negative',
+					'click': ui.createHandlerFn(self, function() {
+						return callPurge(self.data.iccid).then(function(res) {
+							ui.hideModal();
+							return self.afterDelete(res);
+						});
+					})
+				}, 'すべて削除する')
+			])
+		]);
+	},
+
+	afterDelete: function(res) {
+		var self = this;
+		if (res && res.error) {
+			ui.addNotification(null, E('p', {}, res.error), 'warning');
+			return;
+		}
+		if (res && res.errors && res.errors.length)
+			ui.addNotification(null, E('p', {},
+				'モデム側で消せなかったものがあります: ' + res.errors.join(' / ') +
+				' — 保管庫からは消えており、取り込み直しても戻りません。'), 'warning');
+		return Promise.all([ callSims(), callMessages(self.data.iccid, 200) ])
+			.then(function(r) {
+				self.data.sims = (r[0] && r[0].sims) || [];
+				self.data.messages = (r[1] && r[1].messages) || [];
+				if (!self.data.sims.filter(function(s) { return s.iccid == self.data.iccid; }).length)
+					self.data.iccid = self.data.sims.length ? self.data.sims[0].iccid : null;
+				self.redraw();
+			});
 	},
 
 	handleSave: null,
