@@ -19,6 +19,11 @@ apply_now() {
 		sleep 2
 	done
 	/usr/bin/sbair-modem apn apply 2>&1 | logger -t sbair-apn
+
+	# 受信 SMS をモデムに保存させる。**再起動で 0,0,0,0,0 に戻る。**
+	# 既定でも保存はされるはずだが (TS 27.007 の <mt>=0 は「通知しない」だけ)、
+	# この機体では確かめられていない。保存する側に倒しておく。
+	/usr/bin/sbair-modem at 'AT+CNMI=1,1,0,0,0' >/dev/null 2>&1
 }
 
 boot() {

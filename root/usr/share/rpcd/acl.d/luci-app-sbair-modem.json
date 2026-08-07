@@ -14,7 +14,9 @@
 					"simlock_status",
 					"apn_status",
 					"apn_probe",
-					"modem_reset_status"
+					"modem_reset_status",
+					"sms_list",
+					"sms_status"
 				]
 			}
 		},

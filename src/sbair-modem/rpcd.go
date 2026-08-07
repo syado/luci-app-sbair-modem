@@ -47,6 +47,9 @@ var methods = map[string]map[string]any{
 	// モデムのリセット (AT+CFUN=0 → 1 → ifup wan)。30〜60 秒かかるので非同期。
 	"modem_reset":        {},
 	"modem_reset_status": {},
+	// SMS。受信のみ。sms_status は本文を読まないので未読を既読にしない。
+	"sms_list":   {},
+	"sms_status": {},
 }
 
 func cmdRPCD(args []string) int {
@@ -166,6 +169,12 @@ func rpcdCall(method string) int {
 		emit(simMapping(ch))
 	case "simlock_get":
 		emit(simlockState(ch))
+	case "sms_status":
+		emit(smsStatus(ch))
+	case "sms_list":
+		// **70 通ぶんの PDU 行が返りうる。** overview の 4 秒では足りない。
+		ch.SetTimeout(30 * time.Second)
+		emit(smsList(ch))
 	case "apn_status":
 		emit(apnStatus(ch))
 	case "apn_apply":
