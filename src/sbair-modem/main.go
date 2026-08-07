@@ -98,6 +98,12 @@ func main() {
 		os.Exit(runSimlockWorker(args[1]))
 	case "reset-worker":
 		os.Exit(runResetWorker())
+	case "band-worker":
+		// startJob が "band-worker" "set" <lte> <nr> で起こす。
+		if len(args) < 4 {
+			os.Exit(2)
+		}
+		os.Exit(runBandWorker(args[2], args[3]))
 	case "download-worker":
 		if len(args) < 2 {
 			os.Exit(2)
@@ -107,6 +113,55 @@ func main() {
 			cc = args[2]
 		}
 		os.Exit(runDownloadWorker(args[1], cc))
+	}
+
+	// ⚠ **ワーカーを回す経路は、チャネルを開く前に捌く。**
+	//
+	// `Disconnect()` は flock を手放さない(**プロセスの寿命ぶん保持する**)。
+	// 先に開いてから `Disconnect()` してワーカーを呼ぶと、
+	// **自分が握っている flock に自分で弾かれ**
+	// `another sbair-modem is using the modem` になる。
+	// 同じ形の取り違えを reset と simlock で 1 度ずつ踏んでいる。
+	switch args[0] {
+	case "reset":
+		// CLI では待って構わないので、ワーカーの中身をそのまま同期で回す。
+		runResetWorker()
+		emit(readJob("reset"))
+		return
+	case "band":
+		if len(args) < 3 {
+			fail("usage: sbair-modem band <LTE list> <5G list>   例: band 1,41,42 3,28,77")
+		}
+		runBandWorker(args[1], args[2])
+		emit(readJob("band"))
+		return
+	case "simlock":
+		if len(args) > 1 && (args[1] == "on" || args[1] == "off") {
+			emit(startSimlock(args[1] == "on"))
+			return
+		}
+	case "simmap":
+		if len(args) > 1 {
+			var n int
+			fmt.Sscanf(args[1], "%d", &n)
+			emit(startSimmap(n))
+			return
+		}
+	case "download":
+		if len(args) < 2 {
+			fail("usage: sbair-modem download <ACTIVATION-CODE|->")
+		}
+		code := args[1]
+		if code == "-" {
+			b, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				fail("アクティベーションコードを読めません: %v", err)
+			}
+			code = strings.TrimSpace(string(b))
+		}
+		runDownloadWorker(code, *confirm)
+		emit(readJob("download"))
+		return
 	}
 
 	ch := NewATChannel(*device)
@@ -128,14 +183,8 @@ func main() {
 		emit(esimStatus(ch))
 		return
 	case "simmap":
-		if len(args) < 2 {
-			emit(simMapping(ch))
-			return
-		}
-		var n int
-		fmt.Sscanf(args[1], "%d", &n)
-		ch.Disconnect() // ワーカーが lock を取れるように手放す
-		emit(startSimmap(n))
+		// 引数付きは上で捌いている。ここは照会だけ。
+		emit(simMapping(ch))
 		return
 	case "overview":
 		emit(collectOverview(ch))
@@ -144,6 +193,10 @@ func main() {
 		// 起動時の一括適用 (init.d/sbair-apn)。**重い操作もここでは待つ。**
 		emit(apnApplyBoot(ch))
 		_, _ = ch.Command("AT+CNMI=1,1,0,0,0")
+		// **最後に置く。** モデムはここまでの処理より遅れて初期化を
+		// やり直し、そのときバンドが出荷既定へ戻る。頭に置くと APN と
+		// WAN がこの見張りの時間ぶん待たされる。
+		settleBands(ch)
 		return
 	case "apn":
 		if len(args) > 1 && args[1] == "apply" {
@@ -157,11 +210,7 @@ func main() {
 		emit(apnStatus(ch))
 		return
 	case "simlock":
-		if len(args) > 1 && (args[1] == "on" || args[1] == "off") {
-			ch.Disconnect() // ワーカーが lock を取れるように手放す
-			emit(startSimlock(args[1] == "on"))
-			return
-		}
+		// on/off は上で捌いている。ここは照会だけ。
 		emit(simlockState(ch))
 		return
 	case "sms":
@@ -174,12 +223,6 @@ func main() {
 			return
 		}
 		emit(imsStatus(ch))
-		return
-	case "reset":
-		// CLI では待って構わないので、ワーカーの中身をそのまま同期で回す。
-		ch.Disconnect() // ワーカーが lock を取れるように手放す
-		runResetWorker()
-		emit(readJob("reset"))
 		return
 	case "list":
 		emit(esimOp(ch, "esim_list", ""))
@@ -206,23 +249,6 @@ func main() {
 	}
 
 	switch args[0] {
-	case "download":
-		// CLI では待って構わないので、ワーカーの中身をそのまま同期で回す。
-		if len(args) < 2 {
-			fail("usage: sbair-modem download <ACTIVATION-CODE|->")
-		}
-		code := args[1]
-		if code == "-" {
-			b, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				fail("アクティベーションコードを読めません: %v", err)
-			}
-			code = strings.TrimSpace(string(b))
-		}
-		ch.Disconnect() // ワーカーと同じ経路を使うので lock を手放す
-		runDownloadWorker(code, *confirm)
-		emit(readJob("download"))
-		return
 	case "discovery":
 		_, _, _, aid := inspectCard(ch)
 		client, err := openEUICC(ch, aid)
@@ -290,6 +316,8 @@ func usage() {
   sbair-modem reset                        modem reset (CFUN 0/1) and ifup wan
   sbair-modem sms                          import received SMS into the store
   sbair-modem ims [on|off]                 IMS: show, or switch
+  sbair-modem band <LTE> <5G>              enable these bands (e.g. 1,41,42 3,28,77)
+                                           reverts itself if the modem stays off-net
   sbair-modem apn [apply|probe]            APN: show / apply stored / ask the SIM
   sbair-modem boot                         apply everything this SIM needs (boot)
   sbair-modem gc                           reclaim leaked logical channels

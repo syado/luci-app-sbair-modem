@@ -142,6 +142,13 @@ func (c *ATChannel) Connect() error {
 
 // Disconnect drops the socket but keeps the process-wide lock: a reconnect in
 // the middle of an operation must not let another process slip in.
+//
+// ⚠ **だから「ワーカーに渡すために Disconnect する」は効かない。** lock は
+// プロセスが終わるまで残るので、同じプロセスの中でチャネルを開き直す処理
+// (ワーカー本体や simlockApply)を呼ぶと、**自分の lock に自分で弾かれて**
+// `another sbair-modem is using the modem` になる。**この取り違えは
+// 3 回踏んでいる。** 開いてあるチャネルをそのまま渡すか、
+// **開く前に捌く**こと(main.go 参照)。
 func (c *ATChannel) Disconnect() error {
 	if c.conn == nil {
 		return nil
