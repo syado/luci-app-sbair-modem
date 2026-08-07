@@ -235,19 +235,11 @@ func apnStatus(ch *ATChannel) map[string]any {
 // applyToLTE mirrors the entry into /etc/config/lte.
 //
 // **これをやらないと再起動のたびに APN が出荷時の値へ戻る。** ベンダの
-// `/usr/bin/knsh` が起動時に
+// 起動処理が `/etc/config/lte` から `network.wan.*` へ流し込むので、
+// **network.wan だけ直しても上書きされる**。ベンダの仕組みと戦わず、
+// 参照元の方に正しい値を置く。→ sbair6-rs の docs/AT.md「APN とデータコール」
 //
-//	lte.<mode>.apn           -> network.wan.apn
-//	lte.<mode>.apn_auth_type -> network.wan.auth
-//	lte.<mode>.apn_userid    -> network.wan.username
-//	lte.<mode>.apn_passwd    -> network.wan.password
-//
-// を流し込む。**network.wan だけ直しても上書きされる**(実機で
-// 起動 48 秒後に `sbair-apn` が正しい値を書き、その 4 秒後に knsh が
-// SoftBank の `artemis.air` へ戻すのを観測した)。ベンダの仕組みと
-// 戦わず、参照元の方に正しい値を置く。
-//
-// mode は 5g / lte / backup / test。**どれが選ばれるかは knsh 側で決まる**
+// mode は 5g / lte / backup / test。**どれが選ばれるかはベンダ側で決まる**
 // ので全部そろえる。存在しない mode は uci が黙って弾くので害は無い。
 //
 // 失敗しても致命的ではない(次の起動で戻るだけ)ので、呼び出し側は
@@ -315,6 +307,7 @@ func ensureModemState(ch *ATChannel, e apnEntry, slow bool) []string {
 			}
 		}
 	}
+	// バンドは SIM に紐づかないので、ここではなく apnApplyMode の頭で扱う。
 	return notes
 }
 
@@ -324,19 +317,25 @@ func apnApply(ch *ATChannel) map[string]any { return apnApplyMode(ch, false) }
 func apnApplyBoot(ch *ATChannel) map[string]any { return apnApplyMode(ch, true) }
 
 func apnApplyMode(ch *ATChannel, slow bool) map[string]any {
+	// **バンドは SIM ではなく機体に紐づく。** APN が未登録でも入れ直す
+	// 必要があるので、下の早期 return より前に置く。
+	notes := ensureBands(ch, slow)
+
 	iccid := currentICCID(ch)
 	if iccid == "" {
-		return map[string]any{"error": "SIM の ICCID を読めません。"}
+		return map[string]any{"error": "SIM の ICCID を読めません。",
+			"note": strings.Join(notes, " ")}
 	}
 	e, ok := apnGet(iccid)
 	if !ok {
 		return map[string]any{"result": "skipped", "iccid": iccid,
-			"note": "この SIM の APN は登録されていません。WAN は変更していません。"}
+			"note": strings.Join(append(notes,
+				"この SIM の APN は登録されていません。WAN は変更していません。"), " ")}
 	}
 
 	// **APN を書く前にモデムの状態を揃える。** 解除は電波を落とすので、
 	// 先に ifup してしまうとそこで切れる。
-	notes := ensureModemState(ch, e, slow)
+	notes = append(notes, ensureModemState(ch, e, slow)...)
 
 	set := func(k, v string) {
 		if v == "" {
@@ -352,22 +351,9 @@ func apnApplyMode(ch *ATChannel, slow bool) map[string]any {
 	set("iptype", e.IPType)
 
 	// **auto_conf は必ず 0 にする。** 1 のままだと netifd の proto が
-	// `check_auto_apn_prov` を呼ぶが、その関数のループは**データが欠けて
-	// いるときにしか retry を減らさない**:
-	//
-	//	retry=2
-	//	while [ "$retry" -gt 0 ]; do
-	//	    apn_data=`ql_datacall --apn_provision_by_sim`
-	//	    ...
-	//	    if [ -z "$db_user" ] || [ -z "$db_password" ] || [ -z "$db_auth_type" ]; then
-	//	        let retry--
-	//	    fi
-	//	    sleep 1
-	//	done          # ← 成功時に break が無い
-	//
-	// SIM が完全な APN を返すと**永久に抜けない**。実機で au の SIM が
-	// user/password/auth_type を全部返し、WAN の setup がここで止まって
-	// `starting connection` に到達しない。
+	// SIM から APN を引く関数を呼ぶが、そのループは**成功時に抜けない**
+	// (データが欠けているときにしか retry を減らさない)。SIM が完全な
+	// APN を返すと WAN の setup がそこで止まる。
 	// こちらで APN を管理する以上、その仕組みは使わない。
 	_, _ = uci("set", wanIface+".auto_conf=0")
 

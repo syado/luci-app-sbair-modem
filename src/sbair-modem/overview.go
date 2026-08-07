@@ -16,21 +16,9 @@ import (
 // and one connection to atcid. Splitting "rsrp" and "rsrq" into two methods
 // would double all of that for no gain.
 //
-// **Only standard 3GPP commands are used, because the cell-level vendor ones
-// do not exist here.** The modem answers ATI with "Quectel / RG620T-SBK", but
-// the firmware underneath is MediaTek (AT+CGMR reports MOLY.NR16.R2.MD800),
-// and every cell-info extension either family defines was measured on hardware
-// to return +CME ERROR: 4 (not supported):
-//
-//	AT+QENG="servingcell"  AT+QCSQ  AT+QNWINFO  AT+QCAINFO   (Quectel)
-//	AT+EEMGINFO?  AT+ECELLINFO  AT+SGCELLINFOEX?  AT+BMTCELLINFO
-//	AT+GTCCINFO?  AT+XLEC?  AT+CPSI?  AT^HCSQ?  AT+MTSM=
-//
-// So there is no band, no PCI and no cell-level report to be had. What works
-// is +CSQ, +CESQ, +CREG/+CEREG/+CGREG/+C5GREG, +COPS and +CSCON.
-//
-// It is not a clean sweep though - AT+QTEMP (27 sensors) and AT+QUIMSLOT? do
-// answer. **Measure a vendor command one at a time; never write off a family.**
+// **どの AT が実装されているかは機体ごとに違う。** どれが答えてどれが
+// `+CME ERROR: 4` を返すかは sbair6-rs の docs/AT.md にまとめてある。
+// ここでは**当てずっぽうで新しいコマンドを足さない**こと。
 //
 // Every field is best-effort: a modem that does not answer one probe must
 // still produce a usable screen, so a failed probe leaves its fields empty
@@ -66,6 +54,10 @@ type Overview struct {
 	// TS 27.007 defines, and only the standard ones are decoded above, so the
 	// raw line is kept rather than guessed at.
 	CESQ string `json:"cesq,omitempty"`
+
+	// Band is the serving band, the supported/enabled band masks and the
+	// per-antenna measurements. Absent when none of its probes answered.
+	Band *BandInfo `json:"band,omitempty"`
 
 	// Temperatures is what AT+QTEMP reports. It is one of the two vendor
 	// commands this modem does implement.
@@ -125,9 +117,8 @@ func collectOverview(ch *ATChannel) *Overview {
 	}
 
 	// value returns the payload of a reply, whether or not the modem echoes a
-	// prefix. AT+CGMM answers with a bare "RG620T-SBK" while AT+CGMR answers
-	// "+CGMR: MOLY..." on this firmware - both forms have to work, and a
-	// stray URC must be skipped either way.
+	// prefix. **どちらの形も来る** - 同じ機体でも素の値を返すコマンドと
+	// プレフィクス付きで返すコマンドが混ざる。stray URC も飛ばすこと。
 	value := func(lines []string, prefix string) string {
 		if v, ok := First(lines, prefix); ok {
 			return v
@@ -156,14 +147,14 @@ func collectOverview(ch *ATChannel) *Overview {
 
 	collectRegistration(o, ask)
 	collectSignal(o, ask)
+	// **温度より前に置く。** 予算が尽きたときに落とすなら、センサ値の
+	// ほうが接続中のバンドより惜しくない。
+	collectBand(o, ask)
 	collectTemperature(o, ask)
 	return o
 }
 
-// collectTemperature reads AT+QTEMP.
-//
-// The cell-info vendor commands are all absent on this modem, but this one is
-// not - it answers with 27 sensors, one per line:
+// collectTemperature reads AT+QTEMP. 1 行 1 センサで返る:
 //
 //	+QTEMP:"soc_max","66.9","0"
 func collectTemperature(o *Overview, ask func(string) []string) {
@@ -183,17 +174,13 @@ func collectTemperature(o *Overview, ask func(string) []string) {
 // collectRegistration asks every registration domain and picks the most
 // informative answer.
 //
-// **Picking the first domain that answers is wrong.** All four answer whether
-// or not they are attached, +C5GREG is asked first, and on this modem it comes
-// back as a bare `+C5GREG: 2,0` while +CEREG carries the location:
-//
-//	+C5GREG: 2,0
-//	+CEREG:  2,0,"****","********",7
-//	+CGREG:  2,0,"0000","00000000",0,"00"     <- placeholder zeros
-//	+CREG:   2,0,"0000","00*******",7
+// **Picking the first domain that answers is wrong.** 4 つとも登録の有無に
+// 関わらず答えるうえ、最初に聞くドメインが位置情報を持たず、後のドメインが
+// 持っていることがある。**0 埋めのプレースホルダを値として返すドメインもある。**
 //
 // So the answers are scored: attached beats carrying a location, which beats
 // merely answering. Ties keep the earlier (more specific) domain.
+// 実際の応答例は sbair6-rs の docs/AT.md「ネットワーク登録の読み方」。
 func collectRegistration(o *Overview, ask func(string) []string) {
 	type domain struct{ cmd, set, prefix, label string }
 	domains := []domain{
@@ -225,10 +212,8 @@ func collectRegistration(o *Overview, ask func(string) []string) {
 			continue
 		}
 
-		// **<n> が 2 でないと TAC も Cell ID も返ってこない。** 既定は 0 で、
-		// そのときの応答は `+CEREG: 0,0` の 2 フィールドだけ。2 にすると
-		// 照会形にも位置情報が付く。一度打てば済むが、**モデムが再初期化
-		// されると戻る**(CFUN の往復や SIM マッピングの切替で消える)ので、
+		// **<n> が 2 でないと TAC も Cell ID も返ってこない。** 既定は 0。
+		// 一度打てば済むが、**モデムが再初期化されると戻る**ので、
 		// 毎回 <n> を見て必要なときだけ設定し直す。
 		if f[0] != "2" {
 			ask(d.set)

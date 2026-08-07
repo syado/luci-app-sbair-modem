@@ -56,6 +56,9 @@ var methods = map[string]map[string]any{
 	// IMS。出荷状態では Off。SMS は IMS 経由で配送される。
 	"ims_status": {},
 	"ims_set":    {"on": false},
+	// バンド。読みは overview の band に入る。変更は数秒ネットワークから切れるので非同期。
+	"band_set":    {"lte": "", "nr": ""},
+	"band_status": {},
 	// 削除は保管庫とモデムの両方から消す。**取り消せない。**
 	"sms_delete": {"hash": ""},
 	"sms_purge":  {"iccid": ""},
@@ -98,6 +101,8 @@ type rpcdArgs struct {
 	Hash             string `json:"hash"`
 	Unlock           string `json:"unlock"`
 	IMS              string `json:"ims"`
+	LTE              string `json:"lte"`
+	NR               string `json:"nr"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -153,6 +158,12 @@ func rpcdCall(method string) int {
 	case "modem_reset":
 		emit(startModemReset())
 		return 0
+	case "band_status":
+		emit(readJob("band"))
+		return 0
+	case "band_set":
+		emit(startBandSet(in.LTE, in.NR))
+		return 0
 	// UCI だけを触るものも AT を開かない。
 	case "apn_set":
 		emit(apnSet(apnEntry{ICCID: in.ICCID, APN: in.APN, Auth: in.Auth,
@@ -198,7 +209,7 @@ func rpcdCall(method string) int {
 	case "sms_status":
 		emit(smsStatus(ch))
 	case "sms_list":
-		// **70 通ぶんの PDU 行が返りうる。** overview の 4 秒では足りない。
+		// **多数の PDU 行が返りうる。** overview の 4 秒では足りない。
 		ch.SetTimeout(30 * time.Second)
 		emit(smsList(ch))
 	case "sms_import":
@@ -208,7 +219,7 @@ func rpcdCall(method string) int {
 		ch.SetTimeout(30 * time.Second)
 		emit(smsDelete(ch, in.Hash))
 	case "sms_purge":
-		// 70 通ぶんの AT+CMGD が並びうる。
+		// 保存件数ぶんの AT+CMGD が並びうる。
 		ch.SetTimeout(60 * time.Second)
 		emit(smsPurge(ch, in.ICCID))
 	case "apn_status":

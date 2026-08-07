@@ -19,7 +19,8 @@
 					"sms_status",
 					"ims_status",
 					"sms_sims",
-					"sms_messages"
+					"sms_messages",
+					"band_status"
 				]
 			}
 		},
@@ -40,7 +41,8 @@
 					"sms_import",
 					"sms_delete",
 					"sms_purge",
-					"ims_set"
+					"ims_set",
+					"band_set"
 				]
 			}
 		}
