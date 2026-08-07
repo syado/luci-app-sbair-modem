@@ -16,7 +16,9 @@
 					"apn_probe",
 					"modem_reset_status",
 					"sms_list",
-					"sms_status"
+					"sms_status",
+					"sms_sims",
+					"sms_messages"
 				]
 			}
 		},
@@ -33,7 +35,8 @@
 					"apn_set",
 					"apn_delete",
 					"apn_apply",
-					"modem_reset"
+					"modem_reset",
+					"sms_import"
 				]
 			}
 		}

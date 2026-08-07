@@ -48,8 +48,11 @@ var methods = map[string]map[string]any{
 	"modem_reset":        {},
 	"modem_reset_status": {},
 	// SMS。受信のみ。sms_status は本文を読まないので未読を既読にしない。
-	"sms_list":   {},
-	"sms_status": {},
+	"sms_list":     {},
+	"sms_status":   {},
+	"sms_import":   {},
+	"sms_sims":     {},
+	"sms_messages": {"iccid": "", "limit": 0},
 }
 
 func cmdRPCD(args []string) int {
@@ -85,6 +88,7 @@ type rpcdArgs struct {
 	IPType           string `json:"iptype"`
 	Label            string `json:"label"`
 	Nickname         string `json:"nickname"`
+	Limit            int    `json:"limit"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -149,6 +153,13 @@ func rpcdCall(method string) int {
 	case "apn_delete":
 		emit(apnDelete(in.ICCID))
 		return 0
+	// 保管庫を読むだけ。**AT を開かない**ので、画面を開いても未読は消えない。
+	case "sms_sims":
+		emit(smsSIMs())
+		return 0
+	case "sms_messages":
+		emit(smsMessages(in.ICCID, in.Limit))
+		return 0
 	case "apn_probe":
 		// モデムに聞くだけで AT は開かない。
 		emit(apnProbe())
@@ -175,6 +186,9 @@ func rpcdCall(method string) int {
 		// **70 通ぶんの PDU 行が返りうる。** overview の 4 秒では足りない。
 		ch.SetTimeout(30 * time.Second)
 		emit(smsList(ch))
+	case "sms_import":
+		ch.SetTimeout(30 * time.Second)
+		emit(smsImport(ch))
 	case "apn_status":
 		emit(apnStatus(ch))
 	case "apn_apply":

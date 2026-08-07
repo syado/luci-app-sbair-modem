@@ -160,6 +160,10 @@ func main() {
 		}
 		emit(simlockState(ch))
 		return
+	case "sms":
+		// 取り込みだけ CLI から使えるようにする。一覧は画面で見る。
+		emit(smsImport(ch))
+		return
 	case "reset":
 		// CLI では待って構わないので、ワーカーの中身をそのまま同期で回す。
 		ch.Disconnect() // ワーカーが lock を取れるように手放す
@@ -273,6 +277,7 @@ func usage() {
                                            1 = tray / 2 = built-in eSIM
   sbair-modem simlock [on|off]             SIM lock: show, or switch
   sbair-modem reset                        modem reset (CFUN 0/1) and ifup wan
+  sbair-modem sms                          import received SMS into the store
   sbair-modem apn [apply|probe]            APN: show / apply stored / ask the SIM
   sbair-modem gc                           reclaim leaked logical channels
   sbair-modem rpcd list|call <method>      rpcd backend (called by rpcd)

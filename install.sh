@@ -42,7 +42,7 @@ put "$SELF/root/usr/share/luci/menu.d/luci-app-sbair-modem.json" \
     "$ROOT/usr/share/luci/menu.d/luci-app-sbair-modem.json"                  0644
 put "$SELF/htdocs/luci-static/resources/tools/sbair.js" \
     "$ROOT/www/luci-static/resources/tools/sbair.js"                         0644
-for v in signal sim device; do
+for v in signal sim sms device; do
 	put "$SELF/htdocs/luci-static/resources/view/sbair/$v.js" \
 	    "$ROOT/www/luci-static/resources/view/sbair/$v.js"                   0644
 done
