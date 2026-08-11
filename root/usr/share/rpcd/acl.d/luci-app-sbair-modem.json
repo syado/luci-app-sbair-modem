@@ -28,7 +28,9 @@
 					"isolation_status",
 					"wifi_11r_status",
 					"macfilter_status",
-					"wps_status"
+					"wps_status",
+					"client_list",
+					"client_scan_ports"
 				]
 			}
 		},
@@ -68,7 +70,8 @@
 					"macfilter_delete",
 					"wps_run",
 					"wps_pin_random",
-					"wps_reset"
+					"wps_reset",
+					"client_note_set"
 				]
 			}
 		}

@@ -55,6 +55,15 @@
 		}
 	},
 
+	"admin/sbair/clients": {
+		"title": "接続機器",
+		"order": 37,
+		"action": {
+			"type": "view",
+			"path": "sbair/clients"
+		}
+	},
+
 	"admin/sbair/wifi_advanced": {
 		"title": "Wi-Fi詳細設定",
 		"order": 36,

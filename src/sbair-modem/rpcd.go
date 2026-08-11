@@ -93,6 +93,12 @@ var methods = map[string]map[string]any{
 	"wps_run":             {"band": "", "mode": "", "pin": ""},
 	"wps_pin_random":      {},
 	"wps_reset":           {"band": ""},
+	// 接続機器一覧(有線・無線問わず)。読み取りのみ。
+	"client_list": {},
+	// MACごとの自由メモ。
+	"client_note_set": {"mac": "", "note": ""},
+	// 個別機器への簡易ポートスキャン(オンデマンド)。
+	"client_scan_ports": {"ip": ""},
 }
 
 func cmdRPCD(args []string) int {
@@ -149,6 +155,8 @@ type rpcdArgs struct {
 	Kind             string `json:"kind"`
 	Pin              string `json:"pin"`
 	Mode             string `json:"mode"`
+	Note             string `json:"note"`
+	IP               string `json:"ip"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -309,6 +317,16 @@ func rpcdCall(method string) int {
 		return 0
 	case "wps_reset":
 		emit(wpsReset(in.Band))
+		return 0
+	case "client_list":
+		// ip neigh / iwinfo / dhcp.leases しか読まない。AT は不要。
+		emit(clientList())
+		return 0
+	case "client_note_set":
+		emit(clientNoteSet(in.MAC, in.Note))
+		return 0
+	case "client_scan_ports":
+		emit(scanPorts(in.IP))
 		return 0
 	}
 

@@ -139,6 +139,10 @@ func main() {
 		// uci しか読まない。AT デバイスは開かない。
 		emit(wifiStatus())
 		return
+	case "clients":
+		// ip neigh / iwinfo / dhcp.leases しか読まない。AT デバイスは開かない。
+		emit(clientList())
+		return
 	case "simlock":
 		if len(args) > 1 && (args[1] == "on" || args[1] == "off") {
 			emit(startSimlock(args[1] == "on"))
@@ -323,6 +327,7 @@ func usage() {
   sbair-modem band <LTE> <5G>              enable these bands (e.g. 1,41,42 3,28,77)
                                            reverts itself if the modem stays off-net
   sbair-modem wifi                         Wi-Fi status (read-only, uci wireless as-is)
+  sbair-modem clients                      connected devices, wired+wireless (read-only)
   sbair-modem apn [apply|probe]            APN: show / apply stored / ask the SIM
   sbair-modem boot                         apply everything this SIM needs (boot)
   sbair-modem gc                           reclaim leaked logical channels
