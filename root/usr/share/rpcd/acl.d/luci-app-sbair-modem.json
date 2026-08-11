@@ -20,7 +20,13 @@
 					"ims_status",
 					"sms_sims",
 					"sms_messages",
-					"band_status"
+					"band_status",
+					"wifi_enabled_status",
+					"bandsteering_status",
+					"isolation_status",
+					"wifi_11r_status",
+					"macfilter_status",
+					"wps_status"
 				]
 			}
 		},
@@ -42,7 +48,18 @@
 					"sms_delete",
 					"sms_purge",
 					"ims_set",
-					"band_set"
+					"band_set",
+					"client_disconnect",
+					"wifi_enabled_set",
+					"bandsteering_set",
+					"isolation_set",
+					"wifi_11r_set",
+					"macfilter_mode_set",
+					"macfilter_add",
+					"macfilter_delete",
+					"wps_run",
+					"wps_pin_random",
+					"wps_reset"
 				]
 			}
 		}
