@@ -157,32 +157,24 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 				onSaveNote(c.mac, val);
 			}
 		});
+		// clampCell: 幅を絞って2行までに折り返し、はみ出す分は隠す。
+		// title属性を必ず添えるので、隠れた分もホバーすれば全文読める。
+		var clampCell = function(text, maxWidth) {
+			return E('td', { 'class': 'td left' }, [
+				E('div', {
+					'style': 'max-width:' + maxWidth + ';display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden',
+					'title': text
+				}, text)
+			]);
+		};
+
 		rows.push(E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td left' }, c.name || '-'),
+			clampCell(c.name || '-', '7em'),
 			E('td', { 'class': 'td left' }, c.ip || '-'),
 			E('td', { 'class': 'td left' }, c.mac || '-'),
-			// 🔴 tdに直接display:-webkit-boxを当てると、tdがtable-cellでは
-			// なくなってしまい行が横並びに並ばず縦積みに崩れた(実機で確認)。
-			// アクションボタンの列と同じく、tdは素のままにして中にdivを1枚
-			// 挟んでそちらに折り返し用のスタイルを当てる。
-			E('td', { 'class': 'td left' }, [
-				E('div', {
-					// 省略記号は使わず全部見せる。ただし際限なく横に伸びないよう
-					// 幅は絞り、収まらない分は2行まで折り返す(3行目以降は隠す)。
-					'style': 'max-width:8em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
-				}, c.vendor || '-')
-			]),
-			E('td', { 'class': 'td left' }, [
-				E('div', {
-					'style': 'max-width:5em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
-				}, c.os || '-')
-			]),
-			E('td', { 'class': 'td left' }, [
-				E('div', {
-					'style': 'max-width:10em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden',
-					'title': linkCell(c)
-				}, linkCell(c))
-			]),
+			clampCell(c.vendor || '-', '10em'),
+			clampCell(c.os || '-', '4em'),
+			clampCell(linkCell(c), '10em'),
 			E('td', { 'class': 'td left' }, noteInput),
 			// 🔴 tdに直接display:flexを当てると、ブラウザによってはtable-cellの
 			// 既定のvertical-align(メモ欄など他の素のtdが縦中央になる由来)が
