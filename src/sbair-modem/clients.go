@@ -175,7 +175,7 @@ func guessOSFromTTL(ttl int) string {
 	case ttl == 0:
 		return ""
 	case ttl >= 60 && ttl <= 64:
-		return "Linux/Unix系"
+		return "Linux / Unix 系"
 	case ttl >= 120 && ttl <= 128:
 		return "Windows"
 	case ttl >= 250:
