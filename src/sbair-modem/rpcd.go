@@ -72,6 +72,9 @@ var methods = map[string]map[string]any{
 	"wifi_set_protocol":  {"band": "", "protocol": "", "apply": ""},
 	"wifi_apply":         {},
 	"system_reboot":      {},
+	// SIMルータ / 光回線AP化の切替。
+	"netmode_status": {},
+	"netmode_set":    {"mode": ""},
 }
 
 func cmdRPCD(args []string) int {
@@ -123,6 +126,7 @@ type rpcdArgs struct {
 	Width            string `json:"width"`
 	Protocol         string `json:"protocol"`
 	Apply            string `json:"apply"`
+	Mode             string `json:"mode"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -226,6 +230,12 @@ func rpcdCall(method string) int {
 		return 0
 	case "system_reboot":
 		emit(systemReboot())
+		return 0
+	case "netmode_status":
+		emit(netmodeStatus())
+		return 0
+	case "netmode_set":
+		emit(netmodeSet(in.Mode))
 		return 0
 	}
 

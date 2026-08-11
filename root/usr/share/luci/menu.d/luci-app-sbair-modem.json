@@ -53,5 +53,14 @@
 			"type": "view",
 			"path": "sbair/wifi"
 		}
+	},
+
+	"admin/sbair/netmode": {
+		"title": "接続モード",
+		"order": 38,
+		"action": {
+			"type": "view",
+			"path": "sbair/netmode"
+		}
 	}
 }

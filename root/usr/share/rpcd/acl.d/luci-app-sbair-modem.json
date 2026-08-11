@@ -21,7 +21,8 @@
 					"sms_sims",
 					"sms_messages",
 					"band_status",
-					"wifi_status"
+					"wifi_status",
+					"netmode_status"
 				]
 			}
 		},
@@ -49,7 +50,8 @@
 					"wifi_set_bandwidth",
 					"wifi_set_protocol",
 					"wifi_apply",
-					"system_reboot"
+					"system_reboot",
+					"netmode_set"
 				]
 			}
 		}
