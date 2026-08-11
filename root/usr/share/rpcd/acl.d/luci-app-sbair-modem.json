@@ -20,7 +20,8 @@
 					"ims_status",
 					"sms_sims",
 					"sms_messages",
-					"band_status"
+					"band_status",
+					"wifi_status"
 				]
 			}
 		},
@@ -42,7 +43,13 @@
 					"sms_delete",
 					"sms_purge",
 					"ims_set",
-					"band_set"
+					"band_set",
+					"wifi_set",
+					"wifi_set_channel",
+					"wifi_set_bandwidth",
+					"wifi_set_protocol",
+					"wifi_apply",
+					"system_reboot"
 				]
 			}
 		}

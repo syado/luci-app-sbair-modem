@@ -62,6 +62,16 @@ var methods = map[string]map[string]any{
 	// 削除は保管庫とモデムの両方から消す。**取り消せない。**
 	"sms_delete": {"hash": ""},
 	"sms_purge":  {"iccid": ""},
+	// Wi-Fi。読み取りは uci の wireless をそのまま見せる。
+	"wifi_status": {},
+	// Wi-Fi書き込み(Phase 2)。apply="0"で呼ぶとuciへは書くが反映(knsh save+restart)を
+	// 保留する。複数箇所をまとめて編集してからwifi_applyを1回だけ呼ぶ運用を想定(wifi.go参照)。
+	"wifi_set":           {"iface": "", "ssid": "", "hidden": "", "disabled": "", "password": "", "encryption": "", "apply": ""},
+	"wifi_set_channel":   {"band": "", "channel": "", "apply": ""},
+	"wifi_set_bandwidth": {"band": "", "width": "", "apply": ""},
+	"wifi_set_protocol":  {"band": "", "protocol": "", "apply": ""},
+	"wifi_apply":         {},
+	"system_reboot":      {},
 }
 
 func cmdRPCD(args []string) int {
@@ -103,6 +113,16 @@ type rpcdArgs struct {
 	IMS              string `json:"ims"`
 	LTE              string `json:"lte"`
 	NR               string `json:"nr"`
+	Iface            string `json:"iface"`
+	SSID             string `json:"ssid"`
+	Hidden           string `json:"hidden"`
+	Disabled         string `json:"disabled"`
+	Encryption       string `json:"encryption"`
+	Band             string `json:"band"`
+	Channel          string `json:"channel"`
+	Width            string `json:"width"`
+	Protocol         string `json:"protocol"`
+	Apply            string `json:"apply"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -184,6 +204,28 @@ func rpcdCall(method string) int {
 	case "apn_probe":
 		// モデムに聞くだけで AT は開かない。
 		emit(apnProbe())
+		return 0
+	case "wifi_status":
+		// uci しか読まない。AT は不要。
+		emit(wifiStatus())
+		return 0
+	case "wifi_set":
+		emit(wifiSet(in.Iface, in.SSID, in.Hidden, in.Disabled, in.Password, in.Encryption, in.Apply))
+		return 0
+	case "wifi_set_channel":
+		emit(wifiSetChannel(in.Band, in.Channel, in.Apply))
+		return 0
+	case "wifi_set_bandwidth":
+		emit(wifiSetBandwidth(in.Band, in.Width, in.Apply))
+		return 0
+	case "wifi_set_protocol":
+		emit(wifiSetProtocol(in.Band, in.Protocol, in.Apply))
+		return 0
+	case "wifi_apply":
+		emit(wifiApply())
+		return 0
+	case "system_reboot":
+		emit(systemReboot())
 		return 0
 	}
 
