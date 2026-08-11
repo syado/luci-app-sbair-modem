@@ -44,5 +44,14 @@
 			"type": "view",
 			"path": "sbair/device"
 		}
+	},
+
+	"admin/sbair/wifi": {
+		"title": "Wi-Fi",
+		"order": 35,
+		"action": {
+			"type": "view",
+			"path": "sbair/wifi"
+		}
 	}
 }
