@@ -318,13 +318,12 @@ func clientListImpl() map[string]any {
 	// そのため、それでも埋まらない分は mDNS(RFC 6762)での逆引きPTRも試す。
 	// iOS/macOS等、多くの端末はこちらに応答する。
 	//
-	// LLMNR(llmnr.go)はNetBIOSより新しく、Windows機がファイル共有を
-	// 切っていても大抵は生きている。NBNS(NetBIOS)はより古いWindows機、
-	// SSDP(UPnP)はスマートTV・プリンター等、それでも応答しない機器の
-	// 最後の手段として追加した。
+	// NBNS(NetBIOS、nbns.go)はWindows機の名前解決。IPが既に分かっている
+	// 相手にユニキャストで直接問い合わせるだけなので単純。SSDP(UPnP)はスマートTV・プリンター等、
+	// mDNS/DNSに応答しない機器の最後の手段として追加した。
 	//
-	// 🔴 **実機で踏んだ問題(2026-08-12)**: この5つは互いに独立しているのに
-	// 逐次実行だと待ち時間(最大 2+1.5+1.2+1.2+4 秒程度)がそのまま積み上がる。
+	// 🔴 **実機で踏んだ問題(2026-08-12)**: この4つは互いに独立しているのに
+	// 逐次実行だと待ち時間(最大 2+1.5+1.2+4 秒程度)がそのまま積み上がる。
 	// 実機の稼働LAN(実在の端末が20台超)のような賑やかな環境ではそれぞれが
 	// 上限いっぱいまでかかりやすく、画面が返るまで数十秒単位になっていた。
 	// 独立クエリなので並列に投げ、一番遅いものの時間だけで済ませる。
@@ -332,12 +331,11 @@ func clientListImpl() map[string]any {
 	for _, ip := range ips {
 		pending = append(pending, ip)
 	}
-	var ptrNames, mdnsNames, llmnrNames, nbnsNames, ssdpNames map[string]string
+	var ptrNames, mdnsNames, nbnsNames, ssdpNames map[string]string
 	var lookupWG sync.WaitGroup
-	lookupWG.Add(5)
+	lookupWG.Add(4)
 	go func() { defer lookupWG.Done(); ptrNames = reverseLookup(ips) }()
 	go func() { defer lookupWG.Done(); mdnsNames = mdnsReverseLookup(pending) }()
-	go func() { defer lookupWG.Done(); llmnrNames = llmnrReverseLookup(pending) }()
 	go func() { defer lookupWG.Done(); nbnsNames = nbnsLookup(pending) }()
 	go func() { defer lookupWG.Done(); ssdpNames = ssdpDiscover() }()
 	lookupWG.Wait()
@@ -354,7 +352,7 @@ func clientListImpl() map[string]any {
 		ip := ips[e.mac]
 		name := firstValidName(names[e.mac], ptrNames[e.mac])
 		if name == "" && ip != "" {
-			name = firstValidName(mdnsNames[ip], llmnrNames[ip], nbnsNames[ip], ssdpNames[ip])
+			name = firstValidName(mdnsNames[ip], nbnsNames[ip], ssdpNames[ip])
 		}
 		if name == "" {
 			name = "-"
