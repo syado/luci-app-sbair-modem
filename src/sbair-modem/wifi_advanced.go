@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 soralis0912
+// Copyright (c) 2026 syado
 //
 // Wi-Fi の追加機能(Phase 3、2026-08-10)。`knsh`本体の逆アセンブル(§docs/KNSH_COMMAND_AUDIT.md
 // §6)と純正UI PHPソース(controllers/Wlan/*.php)の読み込みで裏取り済みのコマンドのみを使う。

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 soralis0912
+// Copyright (c) 2026 syado
 //
 // SIMルータ / 光回線AP化(ダンブAP)の手動切替。
 // 実体は /usr/sbin/sbair-netmode(recovery/files/usr/sbin/sbair-netmode)。

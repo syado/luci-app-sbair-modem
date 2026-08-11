@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 soralis0912
+// Copyright (c) 2026 syado
 //
 // br-lan に今いる端末の一覧(有線・無線問わない)。
 //

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 soralis0912
+// Copyright (c) 2026 syado
 //
 // MAC単位の広告ブロック管理画面。SSIDでは分けず、有線・無線・帯域を問わず
 // 送信元MACだけで判定する(adblock.go参照)。

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 soralis0912
+// Copyright (c) 2026 syado
 //
 // Wi-Fi の追加機能(Phase 3、2026-08-10)。`docs/KNSH_COMMAND_AUDIT.md` §6の
 // 逆アセンブル調査と純正UI PHPソースの読み込みで裏取りした`knsh`コマンドを
