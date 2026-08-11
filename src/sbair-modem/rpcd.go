@@ -62,6 +62,12 @@ var methods = map[string]map[string]any{
 	// 削除は保管庫とモデムの両方から消す。**取り消せない。**
 	"sms_delete": {"hash": ""},
 	"sms_purge":  {"iccid": ""},
+	// 接続機器一覧(有線・無線問わず)。読み取りのみ。
+	"client_list": {},
+	// MACごとの自由メモ。
+	"client_note_set": {"mac": "", "note": ""},
+	// 個別機器への簡易ポートスキャン(オンデマンド)。
+	"client_scan_ports": {"ip": ""},
 }
 
 func cmdRPCD(args []string) int {
@@ -103,6 +109,9 @@ type rpcdArgs struct {
 	IMS              string `json:"ims"`
 	LTE              string `json:"lte"`
 	NR               string `json:"nr"`
+	MAC              string `json:"mac"`
+	Note             string `json:"note"`
+	IP               string `json:"ip"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -184,6 +193,16 @@ func rpcdCall(method string) int {
 	case "apn_probe":
 		// モデムに聞くだけで AT は開かない。
 		emit(apnProbe())
+		return 0
+	case "client_list":
+		// ip neigh / iwinfo / dhcp.leases しか読まない。AT は不要。
+		emit(clientList())
+		return 0
+	case "client_note_set":
+		emit(clientNoteSet(in.MAC, in.Note))
+		return 0
+	case "client_scan_ports":
+		emit(scanPorts(in.IP))
 		return 0
 	}
 

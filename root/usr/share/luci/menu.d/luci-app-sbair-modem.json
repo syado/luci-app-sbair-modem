@@ -44,5 +44,14 @@
 			"type": "view",
 			"path": "sbair/device"
 		}
+	},
+
+	"admin/sbair/clients": {
+		"title": "接続機器",
+		"order": 37,
+		"action": {
+			"type": "view",
+			"path": "sbair/clients"
+		}
 	}
 }
