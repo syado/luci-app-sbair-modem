@@ -62,6 +62,9 @@ var methods = map[string]map[string]any{
 	// 削除は保管庫とモデムの両方から消す。**取り消せない。**
 	"sms_delete": {"hash": ""},
 	"sms_purge":  {"iccid": ""},
+	// MAC単位の広告ブロック。SSIDではなくMACで判定する(adblock.go参照)。
+	"adblock_list": {},
+	"adblock_set":  {"mac": "", "enabled": ""},
 }
 
 func cmdRPCD(args []string) int {
@@ -103,6 +106,8 @@ type rpcdArgs struct {
 	IMS              string `json:"ims"`
 	LTE              string `json:"lte"`
 	NR               string `json:"nr"`
+	MAC              string `json:"mac"`
+	Enabled          string `json:"enabled"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -184,6 +189,12 @@ func rpcdCall(method string) int {
 	case "apn_probe":
 		// モデムに聞くだけで AT は開かない。
 		emit(apnProbe())
+		return 0
+	case "adblock_list":
+		emit(adblockList())
+		return 0
+	case "adblock_set":
+		emit(adblockSet(in.MAC, in.Enabled))
 		return 0
 	}
 

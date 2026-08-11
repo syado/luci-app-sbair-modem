@@ -1,0 +1,32 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 soralis0912
+#
+# MAC単位の広告ブロック(adblock.go参照)。
+#   - hostsファイル(StevenBlack/hosts、埋め込み済み)を書き出す
+#   - 登録されたMAC宛のDNS(53)をこの専用dnsmasq(ポート5300)へ転送する
+#     iptablesルールを反映する
+#   - 専用dnsmasqをbr-lan上のポート5300で起動する(システムのdnsmasqとは別プロセス)
+#
+# br-lanがDHCPでIPを取得し終わるまで待ってから反映する(sbair-apnの
+# モデム起動待ちと同じ考え方。最大40秒)。
+
+START=90
+USE_PROCD=1
+
+boot_wait() {
+	for i in $(seq 20); do
+		ip -4 -o addr show dev br-lan 2>/dev/null | grep -q inet && break
+		sleep 2
+	done
+	/usr/bin/sbair-modem adblock-boot 2>&1 | logger -t sbair-adblock
+}
+
+start_service() {
+	boot_wait
+	procd_open_instance
+	# -k: フォアグラウンドのまま(procdが監視・再起動できるようにする)
+	procd_set_param command /usr/sbin/dnsmasq -C /etc/sbair/adblock-dnsmasq.conf -k
+	procd_set_param respawn
+	procd_close_instance
+}
