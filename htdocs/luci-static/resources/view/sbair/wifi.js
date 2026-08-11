@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2026 soralis0912
+// Copyright (c) 2026 syado
 //
 // Wi-Fi の表示 + 編集(Phase 2)。
 //
