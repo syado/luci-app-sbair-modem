@@ -161,20 +161,27 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 			E('td', { 'class': 'td left' }, c.name || '-'),
 			E('td', { 'class': 'td left' }, c.ip || '-'),
 			E('td', { 'class': 'td left' }, c.mac || '-'),
-			E('td', {
-				'class': 'td left',
-				// 省略記号は使わず全部見せる。ただし際限なく横に伸びないよう
-				// 幅は絞り、収まらない分は2行まで折り返す(3行目以降は隠す)。
-				'style': 'max-width:11em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
-			}, c.vendor || '-'),
-			E('td', {
-				'class': 'td left',
-				'style': 'max-width:8em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
-			}, c.os || '-'),
-			E('td', {
-				'class': 'td left',
-				'style': 'max-width:10em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
-			}, linkCell(c)),
+			// 🔴 tdに直接display:-webkit-boxを当てると、tdがtable-cellでは
+			// なくなってしまい行が横並びに並ばず縦積みに崩れた(実機で確認)。
+			// アクションボタンの列と同じく、tdは素のままにして中にdivを1枚
+			// 挟んでそちらに折り返し用のスタイルを当てる。
+			E('td', { 'class': 'td left' }, [
+				E('div', {
+					// 省略記号は使わず全部見せる。ただし際限なく横に伸びないよう
+					// 幅は絞り、収まらない分は2行まで折り返す(3行目以降は隠す)。
+					'style': 'max-width:11em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+				}, c.vendor || '-')
+			]),
+			E('td', { 'class': 'td left' }, [
+				E('div', {
+					'style': 'max-width:8em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+				}, c.os || '-')
+			]),
+			E('td', { 'class': 'td left' }, [
+				E('div', {
+					'style': 'max-width:10em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+				}, linkCell(c))
+			]),
 			E('td', { 'class': 'td left' }, noteInput),
 			// 🔴 tdに直接display:flexを当てると、ブラウザによってはtable-cellの
 			// 既定のvertical-align(メモ欄など他の素のtdが縦中央になる由来)が
