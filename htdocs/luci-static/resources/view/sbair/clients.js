@@ -79,33 +79,48 @@ function sortClients(list, key, dir) {
 	return sorted;
 }
 
-function showPortScanResult(ip, res) {
+// showPortScanResult はスキャン結果を表示するのに加え、モーダル自身の中に
+// 「範囲を指定して追加スキャン」の入力欄を持つ。閉じずに範囲を変えて
+// 何度も実行できるようにするため、onRescan(ip, ports) を渡して自分自身を
+// 呼び直す(モーダルの中身をその都度差し替える)。
+function showPortScanResult(ip, res, onRescan) {
+	var body;
 	if (res.error) {
-		ui.showModal(ip + ' のポートスキャン', [
-			E('p', {}, res.error),
-			E('div', { 'style': 'text-align:right' }, [
-				E('button', { 'class': 'cbi-button', 'click': function() { ui.hideModal(); } }, '閉じる')
-			])
-		]);
-		return;
+		body = E('p', { 'style': 'color:#c00' }, res.error);
+	} else {
+		var open = res.open || [];
+		var scannedNote = res.scanned ? ('(' + res.scanned + 'ポート確認)') : '(よく使う約25ポートのみ確認)';
+		body = !open.length
+			? E('p', {}, '開いているポートは見つかりませんでした' + scannedNote + '。')
+			: sbair.table([ E('tr', { 'class': 'tr table-titles' }, [
+				E('th', { 'class': 'th' }, 'ポート'),
+				E('th', { 'class': 'th' }, 'サービス'),
+				E('th', { 'class': 'th' }, 'バナー')
+			]) ].concat(open.map(function(p) {
+				return E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td left' }, String(p.port)),
+					E('td', { 'class': 'td left' }, p.service || '-'),
+					E('td', { 'class': 'td left' }, p.banner || '-')
+				]);
+			})));
 	}
-	var open = res.open || [];
-	var scannedNote = res.scanned ? ('(' + res.scanned + 'ポート確認)') : '(よく使う約25ポートのみ確認)';
-	var body = !open.length
-		? E('p', {}, '開いているポートは見つかりませんでした' + scannedNote + '。')
-		: sbair.table([ E('tr', { 'class': 'tr table-titles' }, [
-			E('th', { 'class': 'th' }, 'ポート'),
-			E('th', { 'class': 'th' }, 'サービス'),
-			E('th', { 'class': 'th' }, 'バナー')
-		]) ].concat(open.map(function(p) {
-			return E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td left' }, String(p.port)),
-				E('td', { 'class': 'td left' }, p.service || '-'),
-				E('td', { 'class': 'td left' }, p.banner || '-')
-			]);
-		})));
+
+	var rangeInput = E('input', {
+		'class': 'cbi-input-text', 'type': 'text', 'style': 'width:12em',
+		'placeholder': '例: 1-1024,8080'
+	});
+	var rescanBtn = E('button', {
+		'class': 'cbi-button cbi-button-action',
+		'click': function() { onRescan(ip, rangeInput.value); }
+	}, '指定範囲でスキャン');
+
 	ui.showModal(ip + ' のポートスキャン', [
 		body,
+		E('div', { 'style': 'margin-top:1em;padding-top:.8em;border-top:1px solid #ccc;display:flex;gap:.5em;align-items:center;flex-wrap:wrap' }, [
+			rangeInput,
+			rescanBtn,
+			E('span', { 'style': 'opacity:.7;font-size:.9em' }, '空欄なら次回もよく使う約25ポートのみ(最大4096ポートまで)')
+		]),
 		E('div', { 'style': 'text-align:right;margin-top:1em' }, [
 			E('button', { 'class': 'cbi-button', 'click': function() { ui.hideModal(); } }, '閉じる')
 		])
@@ -142,11 +157,6 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 				onSaveNote(c.mac, val);
 			}
 		});
-		var portsInput = E('input', {
-			'class': 'cbi-input-text', 'type': 'text', 'style': 'width:8em',
-			'placeholder': '例:1-1024',
-			'title': '空欄ならよく使う約25ポートのみ。範囲やカンマ区切りで指定すると広げられる(最大4096ポート)。'
-		});
 		rows.push(E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td left' }, c.name || '-'),
 			E('td', { 'class': 'td left' }, c.ip || '-'),
@@ -155,24 +165,24 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 			E('td', { 'class': 'td left' }, c.os || '-'),
 			E('td', { 'class': 'td left' }, linkCell(c)),
 			E('td', { 'class': 'td left' }, noteInput),
-			E('td', { 'class': 'td left' }, [
-				portsInput,
-				' ',
+			E('td', { 'class': 'td left', 'style': 'display:flex;gap:.4em;white-space:nowrap' }, [
 				E('button', {
 					'class': 'cbi-button cbi-button-action',
 					'disabled': (!c.ip || c.ip === '-') ? '' : null,
-					'click': function() { onScan(c.ip, portsInput.value); }
+					'click': function() { onScan(c.ip, ''); }
 				}, 'スキャン'),
-				' ',
 				E('button', {
 					'class': 'cbi-button cbi-button-remove',
 					// 有線接続は切断コマンドの対象外(Wi-Fiクライアントのみ)。
+					// 「一時切断」= knsh経由でAP側からその場でdeauthするだけで、
+					// パスワードを知っていれば端末側からすぐ再接続される。恒久的な
+					// ブロックではない(そちらはMACフィルタ画面の役目)。
 					'disabled': (c.link === 'wired' || !c.mac || c.mac === '-') ? '' : null,
 					'click': function() {
 						if (confirm((c.name || c.mac) + ' をWi-Fiから一時的に切断します。パスワードを知っていればすぐ再接続されます。よろしいですか?'))
 							onDisconnect(c.mac);
 					}
-				}, '切断')
+				}, '一時切断')
 			])
 		]));
 	});
@@ -205,6 +215,17 @@ return view.extend({
 		self.data = data;
 
 		var container = E('div', {});
+
+		// showPortScanResultのモーダルから範囲を変えて再実行できるよう、
+		// 自分自身を onRescan として渡す(名前付きにして自己参照する)。
+		var onScan = function(ip, ports) {
+			callScanPorts(ip, ports || '').then(function(res) {
+				showPortScanResult(ip, res || {}, onScan);
+			}).catch(function(err) {
+				ui.addNotification(null, E('p', {}, String(err)), 'danger');
+			});
+		};
+
 		var redraw = function() {
 			dom.content(container, render(self.data, {
 				sortKey: self.sortKey,
@@ -230,13 +251,7 @@ return view.extend({
 						ui.addNotification(null, E('p', {}, String(err)), 'danger');
 					});
 				},
-				onScan: function(ip, ports) {
-					callScanPorts(ip, ports || '').then(function(res) {
-						showPortScanResult(ip, res || {});
-					}).catch(function(err) {
-						ui.addNotification(null, E('p', {}, String(err)), 'danger');
-					});
-				},
+				onScan: onScan,
 				onDisconnect: function(mac) {
 					callDisconnect(mac).then(function(res) {
 						if (res && res.error) {

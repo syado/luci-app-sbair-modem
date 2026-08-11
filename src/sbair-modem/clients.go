@@ -54,6 +54,19 @@ type clientEntry struct {
 // 宛に通信する理由が無く、ip neighがほとんど埋まらない。IPを一覧に出すには
 // 能動的にARPを引くしかない。/24より大きい(ホスト数の多い)ネットワークでは
 // 走査に時間がかかりすぎるため行わない。
+//
+// 🔴 **実機で踏んだ問題(2026-08-12)**: br-lan に本来のDHCPで得たサブネット
+// (例: 192.168.0.0/24)と工場出荷の 172.16.255.0/24 の両方が乗っている状態
+// (dumb AP運用で実際によくある)だと、/24を2本走査して**最大508個の`ping`を
+// 無制限に同時起動**することになり、この機体(組み込みARM)では
+// プロセス生成だけで詰まってclient_listが数分単位で返らなくなった
+// (呼び出し元の`select`は4秒で諦めるが、起動済みの`exec.Command`には
+// タイムアウトが無いため、諦めた後も大量のpingプロセスが残り続けて
+// 次回以降の呼び出しも巻き添えにする)。
+// → 同時実行数を絞り、`context`で確実に打ち切ってプロセスを残さないようにする。
+const arpSweepConcurrency = 32
+const arpSweepBudget = 4 * time.Second
+
 func arpSweep() map[string]int {
 	ttls := map[string]int{}
 	addrs, err := exec.Command("ip", "-4", "-o", "addr", "show", "dev", "br-lan").Output()
@@ -74,8 +87,12 @@ func arpSweep() map[string]int {
 		}
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), arpSweepBudget)
+	defer cancel()
+
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, arpSweepConcurrency)
 	for _, cidr := range cidrs {
 		ip, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
@@ -99,7 +116,16 @@ func arpSweep() map[string]int {
 			wg.Add(1)
 			go func(ipStr string) {
 				defer wg.Done()
-				out, err := exec.Command("ping", "-c", "1", "-W", "2", ipStr).Output()
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					return // 予算を使い切った。これから起動する分はもう待たない。
+				}
+				defer func() { <-sem }()
+				// CommandContext なら、ctx が切れた時点でまだ終わっていない
+				// pingプロセスをこちらから確実に殺せる(素の exec.Command には
+				// タイムアウトが無く、諦めた後もプロセスが残り続けてしまう)。
+				out, err := exec.CommandContext(ctx, "ping", "-c", "1", "-W", "2", ipStr).Output()
 				if err != nil {
 					return
 				}
@@ -115,7 +141,7 @@ func arpSweep() map[string]int {
 	go func() { wg.Wait(); close(done) }()
 	select {
 	case <-done:
-	case <-time.After(4 * time.Second):
+	case <-ctx.Done():
 		// 遅い端末を待ちすぎない。ここまでに応答した分だけ ip neigh に載る。
 	}
 	return ttls
@@ -186,7 +212,27 @@ func looksLikeValidName(s string) bool {
 	return true
 }
 
+// clientListBudget は clientList 全体の上限。内部のどこかが想定外に詰まっても、
+// 画面自体は必ずこの時間内に(エラーであれ)返るようにする。
+//
+// 🔴 **実機で踏んだ問題(2026-08-12)**: 各ステップは個別には数秒で終わる設計だが、
+// 実際に稼働している(実在の端末が20台超いる)LANでは、原因を1箇所に絞り切れない
+// 詰まりが起き、呼び出しが数分単位で返らなくなった。各ステップを個別に直すより、
+// 「全体に必ず上限を設ける」方を先に固定しておく(原因調査は別途続ける)。
+const clientListBudget = 10 * time.Second
+
 func clientList() map[string]any {
+	ch := make(chan map[string]any, 1)
+	go func() { ch <- clientListImpl() }()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(clientListBudget):
+		return map[string]any{"error": "接続機器一覧の取得がタイムアウトしました。この機体のLANが混み合っている可能性があります。しばらくしてからもう一度お試しください。"}
+	}
+}
+
+func clientListImpl() map[string]any {
 	ttls := arpSweep()
 
 	fdbOut, err := exec.Command("bridge", "fdb", "show", "br", "br-lan").Output()
@@ -271,20 +317,30 @@ func clientList() map[string]any {
 	// 🔴 **実機では上位ルータ(Aterm)が逆引きに非対応でNXDOMAINだった。**
 	// そのため、それでも埋まらない分は mDNS(RFC 6762)での逆引きPTRも試す。
 	// iOS/macOS等、多くの端末はこちらに応答する。
-	ptrNames := reverseLookup(ips)
-
-	var pending []string
-	for _, ip := range ips {
-		pending = append(pending, ip)
-	}
-	mdnsNames := mdnsReverseLookup(pending)
+	//
 	// LLMNR(llmnr.go)はNetBIOSより新しく、Windows機がファイル共有を
 	// 切っていても大抵は生きている。NBNS(NetBIOS)はより古いWindows機、
 	// SSDP(UPnP)はスマートTV・プリンター等、それでも応答しない機器の
 	// 最後の手段として追加した。
-	llmnrNames := llmnrReverseLookup(pending)
-	nbnsNames := nbnsLookup(pending)
-	ssdpNames := ssdpDiscover()
+	//
+	// 🔴 **実機で踏んだ問題(2026-08-12)**: この5つは互いに独立しているのに
+	// 逐次実行だと待ち時間(最大 2+1.5+1.2+1.2+4 秒程度)がそのまま積み上がる。
+	// 実機の稼働LAN(実在の端末が20台超)のような賑やかな環境ではそれぞれが
+	// 上限いっぱいまでかかりやすく、画面が返るまで数十秒単位になっていた。
+	// 独立クエリなので並列に投げ、一番遅いものの時間だけで済ませる。
+	var pending []string
+	for _, ip := range ips {
+		pending = append(pending, ip)
+	}
+	var ptrNames, mdnsNames, llmnrNames, nbnsNames, ssdpNames map[string]string
+	var lookupWG sync.WaitGroup
+	lookupWG.Add(5)
+	go func() { defer lookupWG.Done(); ptrNames = reverseLookup(ips) }()
+	go func() { defer lookupWG.Done(); mdnsNames = mdnsReverseLookup(pending) }()
+	go func() { defer lookupWG.Done(); llmnrNames = llmnrReverseLookup(pending) }()
+	go func() { defer lookupWG.Done(); nbnsNames = nbnsLookup(pending) }()
+	go func() { defer lookupWG.Done(); ssdpNames = ssdpDiscover() }()
+	lookupWG.Wait()
 	notes := clientNotes()
 
 	var list []clientEntry
