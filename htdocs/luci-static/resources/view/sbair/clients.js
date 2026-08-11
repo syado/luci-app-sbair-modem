@@ -43,7 +43,7 @@ var columns = [
 	{ key: 'ip', label: 'IPアドレス', numeric: true },
 	{ key: 'mac', label: 'MACアドレス' },
 	{ key: 'vendor', label: 'メーカー' },
-	{ key: 'os', label: 'OS(推定)' },
+	{ key: 'os', label: '推定OS' },
 	{ key: 'link', label: '接続' },
 	{ key: 'note', label: 'メモ' }
 ];
@@ -169,17 +169,18 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 				E('div', {
 					// 省略記号は使わず全部見せる。ただし際限なく横に伸びないよう
 					// 幅は絞り、収まらない分は2行まで折り返す(3行目以降は隠す)。
-					'style': 'max-width:11em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+					'style': 'max-width:8em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
 				}, c.vendor || '-')
 			]),
 			E('td', { 'class': 'td left' }, [
 				E('div', {
-					'style': 'max-width:8em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+					'style': 'max-width:5em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
 				}, c.os || '-')
 			]),
 			E('td', { 'class': 'td left' }, [
 				E('div', {
-					'style': 'max-width:10em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+					'style': 'max-width:10em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden',
+					'title': linkCell(c)
 				}, linkCell(c))
 			]),
 			E('td', { 'class': 'td left' }, noteInput),
