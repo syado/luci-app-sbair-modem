@@ -80,5 +80,14 @@
 			"type": "view",
 			"path": "sbair/netmode"
 		}
+	},
+
+	"admin/sbair/adblock": {
+		"title": "広告ブロック",
+		"order": 39,
+		"action": {
+			"type": "view",
+			"path": "sbair/adblock"
+		}
 	}
 }

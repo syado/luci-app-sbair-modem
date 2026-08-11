@@ -99,6 +99,9 @@ var methods = map[string]map[string]any{
 	"client_note_set": {"mac": "", "note": ""},
 	// 個別機器への簡易ポートスキャン(オンデマンド)。
 	"client_scan_ports": {"ip": ""},
+	// MAC単位の広告ブロック。SSIDではなくMACで判定する(adblock.go参照)。
+	"adblock_list": {},
+	"adblock_set":  {"mac": "", "enabled": ""},
 }
 
 func cmdRPCD(args []string) int {
@@ -327,6 +330,12 @@ func rpcdCall(method string) int {
 		return 0
 	case "client_scan_ports":
 		emit(scanPorts(in.IP))
+		return 0
+	case "adblock_list":
+		emit(adblockList())
+		return 0
+	case "adblock_set":
+		emit(adblockSet(in.MAC, in.Enabled))
 		return 0
 	}
 

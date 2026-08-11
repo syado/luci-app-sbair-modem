@@ -30,7 +30,8 @@
 					"macfilter_status",
 					"wps_status",
 					"client_list",
-					"client_scan_ports"
+					"client_scan_ports",
+					"adblock_list"
 				]
 			}
 		},
@@ -71,7 +72,8 @@
 					"wps_run",
 					"wps_pin_random",
 					"wps_reset",
-					"client_note_set"
+					"client_note_set",
+					"adblock_set"
 				]
 			}
 		}

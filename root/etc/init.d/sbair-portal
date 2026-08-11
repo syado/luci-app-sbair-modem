@@ -1,0 +1,16 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 soralis0912
+#
+# 広告ブロックの自己登録ページ(portal.go、:8090)。認証は無い
+# (アクセスしてきた本人の端末しか操作できない設計のため)。procdで常駐・自動再起動。
+
+START=91
+USE_PROCD=1
+
+start_service() {
+	procd_open_instance
+	procd_set_param command /usr/bin/sbair-modem portal
+	procd_set_param respawn
+	procd_close_instance
+}
