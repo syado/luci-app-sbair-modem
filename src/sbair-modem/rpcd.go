@@ -75,6 +75,24 @@ var methods = map[string]map[string]any{
 	// SIMルータ / 光回線AP化の切替。
 	"netmode_status": {},
 	"netmode_set":    {"mode": ""},
+	// Wi-Fi追加機能(Phase 3)。全て knsh を経由する(wifi_advanced.go参照)。
+	"client_disconnect":   {"mac": ""},
+	"wifi_enabled_status": {},
+	"wifi_enabled_set":    {"enabled": ""},
+	"bandsteering_status": {},
+	"bandsteering_set":    {"enabled": ""},
+	"isolation_status":    {},
+	"isolation_set":       {"kind": "", "enabled": ""},
+	"wifi_11r_status":     {},
+	"wifi_11r_set":        {"enabled": ""},
+	"macfilter_status":    {},
+	"macfilter_mode_set":  {"enabled": ""},
+	"macfilter_add":       {"mac": "", "enabled": ""},
+	"macfilter_delete":    {"mac": ""},
+	"wps_status":          {},
+	"wps_run":             {"band": "", "mode": "", "pin": ""},
+	"wps_pin_random":      {},
+	"wps_reset":           {"band": ""},
 }
 
 func cmdRPCD(args []string) int {
@@ -126,6 +144,10 @@ type rpcdArgs struct {
 	Width            string `json:"width"`
 	Protocol         string `json:"protocol"`
 	Apply            string `json:"apply"`
+	MAC              string `json:"mac"`
+	Enabled          string `json:"enabled"`
+	Kind             string `json:"kind"`
+	Pin              string `json:"pin"`
 	Mode             string `json:"mode"`
 }
 
@@ -236,6 +258,57 @@ func rpcdCall(method string) int {
 		return 0
 	case "netmode_set":
 		emit(netmodeSet(in.Mode))
+		return 0
+	case "client_disconnect":
+		emit(clientDisconnect(in.MAC))
+		return 0
+	case "wifi_enabled_status":
+		emit(wifiEnabledStatus())
+		return 0
+	case "wifi_enabled_set":
+		emit(wifiEnabledSet(in.Enabled))
+		return 0
+	case "bandsteering_status":
+		emit(bandsteeringStatus())
+		return 0
+	case "bandsteering_set":
+		emit(bandsteeringSet(in.Enabled))
+		return 0
+	case "isolation_status":
+		emit(isolationStatus())
+		return 0
+	case "isolation_set":
+		emit(isolationSet(in.Kind, in.Enabled))
+		return 0
+	case "wifi_11r_status":
+		emit(dot11rStatus())
+		return 0
+	case "wifi_11r_set":
+		emit(dot11rSet(in.Enabled))
+		return 0
+	case "macfilter_status":
+		emit(macFilterStatus())
+		return 0
+	case "macfilter_mode_set":
+		emit(macFilterModeSet(in.Enabled))
+		return 0
+	case "macfilter_add":
+		emit(macFilterAdd(in.MAC, in.Enabled))
+		return 0
+	case "macfilter_delete":
+		emit(macFilterDelete(in.MAC))
+		return 0
+	case "wps_status":
+		emit(wpsStatus())
+		return 0
+	case "wps_run":
+		emit(wpsRun(in.Band, in.Mode, in.Pin))
+		return 0
+	case "wps_pin_random":
+		emit(wpsPinRandom())
+		return 0
+	case "wps_reset":
+		emit(wpsReset(in.Band))
 		return 0
 	}
 

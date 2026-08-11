@@ -22,7 +22,13 @@
 					"sms_messages",
 					"band_status",
 					"wifi_status",
-					"netmode_status"
+					"netmode_status",
+					"wifi_enabled_status",
+					"bandsteering_status",
+					"isolation_status",
+					"wifi_11r_status",
+					"macfilter_status",
+					"wps_status"
 				]
 			}
 		},
@@ -51,7 +57,18 @@
 					"wifi_set_protocol",
 					"wifi_apply",
 					"system_reboot",
-					"netmode_set"
+					"netmode_set",
+					"client_disconnect",
+					"wifi_enabled_set",
+					"bandsteering_set",
+					"isolation_set",
+					"wifi_11r_set",
+					"macfilter_mode_set",
+					"macfilter_add",
+					"macfilter_delete",
+					"wps_run",
+					"wps_pin_random",
+					"wps_reset"
 				]
 			}
 		}

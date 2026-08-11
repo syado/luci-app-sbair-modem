@@ -55,6 +55,15 @@
 		}
 	},
 
+	"admin/sbair/wifi_advanced": {
+		"title": "Wi-Fi詳細設定",
+		"order": 36,
+		"action": {
+			"type": "view",
+			"path": "sbair/wifi_advanced"
+		}
+	},
+
 	"admin/sbair/netmode": {
 		"title": "接続モード",
 		"order": 38,
