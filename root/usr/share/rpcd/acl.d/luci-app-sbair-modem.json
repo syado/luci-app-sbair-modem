@@ -20,7 +20,8 @@
 					"ims_status",
 					"sms_sims",
 					"sms_messages",
-					"band_status"
+					"band_status",
+					"netmode_status"
 				]
 			}
 		},
@@ -42,7 +43,8 @@
 					"sms_delete",
 					"sms_purge",
 					"ims_set",
-					"band_set"
+					"band_set",
+					"netmode_set"
 				]
 			}
 		}
