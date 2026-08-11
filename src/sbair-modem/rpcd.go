@@ -97,8 +97,9 @@ var methods = map[string]map[string]any{
 	"client_list": {},
 	// MACごとの自由メモ。
 	"client_note_set": {"mac": "", "note": ""},
-	// 個別機器への簡易ポートスキャン(オンデマンド)。
-	"client_scan_ports": {"ip": ""},
+	// 個別機器への簡易ポートスキャン(オンデマンド)。ports省略時はよく使う
+	// 約25ポートのみ。"1-1024,8080"のような範囲/カンマ区切りを渡すと拡張できる。
+	"client_scan_ports": {"ip": "", "ports": ""},
 	// MAC単位の広告ブロック。SSIDではなくMACで判定する(adblock.go参照)。
 	"adblock_list": {},
 	"adblock_set":  {"mac": "", "enabled": ""},
@@ -160,6 +161,7 @@ type rpcdArgs struct {
 	Mode             string `json:"mode"`
 	Note             string `json:"note"`
 	IP               string `json:"ip"`
+	Ports            string `json:"ports"`
 }
 
 // rpcdError keeps failures on stdout as JSON. rpcd treats a non-zero exit as
@@ -329,7 +331,7 @@ func rpcdCall(method string) int {
 		emit(clientNoteSet(in.MAC, in.Note))
 		return 0
 	case "client_scan_ports":
-		emit(scanPorts(in.IP))
+		emit(scanPorts(in.IP, in.Ports))
 		return 0
 	case "adblock_list":
 		emit(adblockList())

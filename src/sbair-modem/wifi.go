@@ -14,7 +14,7 @@ import (
 // Wi-Fi の現状表示のみ(Phase 1)。書き込みは行わない。
 //
 // mt_wifi は netifd の無線ドライバスクリプトに対応が無く、LuCI標準の
-// Network → Wireless では触れない(docs/WIFI_SUPPORT.md)。設定を書き換えた
+// Network → Wireless では触れない。設定を書き換えた
 // あとの反映経路(wifi reload が効くか、hostapd を個別に叩き直す必要が
 // あるか)が実機未検証のため、まずは uci の wireless 設定をそのまま
 // 読んで一覧表示するところまでに留める。
@@ -335,7 +335,7 @@ func wifiSet(iface, ssid, hidden, disabled, password, encryption, apply string) 
 // wifiSetChannel はチャンネルを変更する。
 //
 // 🔴 **チャンネルは`wireless.<iface>.channel`(uci)からは効かない**
-// (docs/OPENWRT_WIRELESS.md: 「channel / 帯域幅 / txpowerは.datの持ち物」)。
+// (channel / 帯域幅 / txpowerは`.dat`の持ち物で、uciからは動かせない実装)。
 // 純正UIも`system("knsh wlan {2.4,5,6}GHz channel <値>")`を使っている
 // (実機のPHPソースで確認済み)ので、それをそのまま踏襲する。
 func wifiSetChannel(band, channel, apply string) map[string]any {

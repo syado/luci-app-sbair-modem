@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 syado
 //
-// Wi-Fi の追加機能(Phase 3、2026-08-10)。`knsh`本体の逆アセンブル(§docs/KNSH_COMMAND_AUDIT.md
-// §6)と純正UI PHPソース(controllers/Wlan/*.php)の読み込みで裏取り済みのコマンドのみを使う。
+// Wi-Fi の追加機能(Phase 3、2026-08-10)。`knsh`本体の逆アセンブルと純正UI PHPソース
+// (controllers/Wlan/*.php)の読み込みで裏取り済みのコマンドのみを使う。
 // 値を渡す書き込み系は、実行するまで実機での挙動が未検証だったため、
 // 全て「usage文字列 + PHPの実際の呼び出し箇所」の両方が一致するものだけを実装している。
 
@@ -73,8 +73,8 @@ func clientDisconnect(mac string) map[string]any {
 // ---------------------------------------------------------------------------
 // Wi-Fi全体ON/OFF: `knsh wlan function set <0|1>` → knos.network.wlan_enabled
 //
-// 逆アセンブルで確認(§docs/KNSH_COMMAND_AUDIT.md §6、"wlan function"文字列への
-// 参照から辿った)。`/lib/wifi/mtwifi.lua`はこのキーが**空(未設定)のときは
+// 逆アセンブルで確認("wlan function"文字列への参照から辿った)。
+// `/lib/wifi/mtwifi.lua`はこのキーが**空(未設定)のときは
 // 有効とみなす**(`wlan_enable = '1'`がデフォルト)。この機体は現在
 // `/etc/config/knos`が空(2026-08-10 発見、原因不明)なので、空文字列は
 // 「無効」ではなく「デフォルト値(有効)」として扱う。
@@ -322,8 +322,7 @@ func macFilterDelete(mac string) map[string]any {
 // WPS: `knsh wlan wps status` / `run <2.4ghz|5ghz> <pbc|pin> [pin]` /
 // `pin random` / `reset <2.4ghz|5ghz>`
 //
-// 帯域文字列は`strcasecmp`判定(§docs/KNSH_COMMAND_AUDIT.md §6-2)なので
-// 大文字小文字は問わない。6GHzはWPS未対応(usage文字列に無い)。
+// 帯域文字列は`strcasecmp`判定(逆アセンブルで確認)なので大文字小文字は問わない。6GHzはWPS未対応(usage文字列に無い)。
 // PBC(プッシュボタン)は実行すると**一定時間誰でも参加できる状態になる**ため、
 // 画面側で必ず確認ダイアログを挟むこと。
 // ---------------------------------------------------------------------------

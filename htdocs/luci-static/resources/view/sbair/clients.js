@@ -4,9 +4,11 @@
 // br-lan に今いる端末の一覧(有線・無線問わない)。
 //
 // 正はブリッジのFDB(clients.go参照)。IP/名前/メーカーは分かる範囲での
-// ベストエフォート(DHCPリース・DNS逆引き・mDNS・NetBIOS・SSDP)。
-// 列見出しをクリックすると並べ替えられる。メモは自由入力で保存できる
-// (/etc/config/sbair)。ポートスキャンは個別にオンデマンドで実行する。
+// ベストエフォート(DHCPリース・DNS逆引き・mDNS・LLMNR・NetBIOS・SSDP)。
+// 列見出しをクリックすると並べ替えられる。メモは自由入力で、フォーカスを
+// 外すと自動保存される(/etc/config/sbair)。ポートスキャンは個別に
+// オンデマンドで実行する。デフォルトはよく使う約25ポートのみだが、
+// 範囲(例: 1-1024)やカンマ区切りを指定して広げられる。
 
 'use strict';
 'require view';
@@ -17,7 +19,7 @@
 
 var callClientList = rpc.declare({ object: 'sbair', method: 'client_list' });
 var callNoteSet = rpc.declare({ object: 'sbair', method: 'client_note_set', params: [ 'mac', 'note' ] });
-var callScanPorts = rpc.declare({ object: 'sbair', method: 'client_scan_ports', params: [ 'ip' ] });
+var callScanPorts = rpc.declare({ object: 'sbair', method: 'client_scan_ports', params: [ 'ip', 'ports' ] });
 var callDisconnect = rpc.declare({ object: 'sbair', method: 'client_disconnect', params: [ 'mac' ] });
 
 var bandLabel = { '2.4G': '2.4GHz', '5G': '5GHz', '6G': '6GHz' };
@@ -28,14 +30,21 @@ function linkLabel(link) {
 	return bandLabel[link] || link || '-';
 }
 
+// 接続方式とSSIDは見た目には常にセットで意味を持つ(SSIDだけ見ても
+// どの帯域かは分からない)ので、1カラムにまとめて表示する。
+// 有線には元々SSIDが無いので方式名だけになる。
+function linkCell(c) {
+	var label = linkLabel(c.link);
+	return c.ssid ? (label + ' (' + c.ssid + ')') : label;
+}
+
 var columns = [
 	{ key: 'name', label: '名前' },
 	{ key: 'ip', label: 'IPアドレス', numeric: true },
 	{ key: 'mac', label: 'MACアドレス' },
 	{ key: 'vendor', label: 'メーカー' },
 	{ key: 'os', label: 'OS(推定)' },
-	{ key: 'link', label: '接続方式' },
-	{ key: 'ssid', label: 'SSID' },
+	{ key: 'link', label: '接続' },
 	{ key: 'note', label: 'メモ' }
 ];
 
@@ -81,8 +90,9 @@ function showPortScanResult(ip, res) {
 		return;
 	}
 	var open = res.open || [];
+	var scannedNote = res.scanned ? ('(' + res.scanned + 'ポート確認)') : '(よく使う約25ポートのみ確認)';
 	var body = !open.length
-		? E('p', {}, '開いているポートは見つかりませんでした(よく使う約25ポートのみ確認)。')
+		? E('p', {}, '開いているポートは見つかりませんでした' + scannedNote + '。')
 		: sbair.table([ E('tr', { 'class': 'tr table-titles' }, [
 			E('th', { 'class': 'th' }, 'ポート'),
 			E('th', { 'class': 'th' }, 'サービス'),
@@ -118,9 +128,24 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 	var rows = [ E('tr', { 'class': 'tr table-titles' }, head) ];
 
 	sortClients(list, sortKey, sortDir).forEach(function(c) {
+		var origNote = c.note || '';
 		var noteInput = E('input', {
 			'class': 'cbi-input-text', 'type': 'text', 'style': 'width:10em',
-			'value': c.note || ''
+			'value': origNote,
+			// フォーカスを外した瞬間に保存する(値が変わっていないときは何もしない)。
+			// 毎回「保存」を押す手間と、押し忘れて消える不安を両方消す狙い。
+			'blur': function(ev) {
+				var val = ev.target.value;
+				if (val === origNote)
+					return;
+				origNote = val; // 連続blurでの二重保存を防ぐ
+				onSaveNote(c.mac, val);
+			}
+		});
+		var portsInput = E('input', {
+			'class': 'cbi-input-text', 'type': 'text', 'style': 'width:8em',
+			'placeholder': '例:1-1024',
+			'title': '空欄ならよく使う約25ポートのみ。範囲やカンマ区切りで指定すると広げられる(最大4096ポート)。'
 		});
 		rows.push(E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td left' }, c.name || '-'),
@@ -128,21 +153,15 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 			E('td', { 'class': 'td left' }, c.mac || '-'),
 			E('td', { 'class': 'td left' }, c.vendor || '-'),
 			E('td', { 'class': 'td left' }, c.os || '-'),
-			E('td', { 'class': 'td left' }, linkLabel(c.link)),
-			E('td', { 'class': 'td left' }, c.ssid || '-'),
+			E('td', { 'class': 'td left' }, linkCell(c)),
+			E('td', { 'class': 'td left' }, noteInput),
 			E('td', { 'class': 'td left' }, [
-				noteInput,
+				portsInput,
 				' ',
-				E('button', {
-					'class': 'cbi-button cbi-button-neutral',
-					'click': function() { onSaveNote(c.mac, noteInput.value); }
-				}, '保存')
-			]),
-			E('td', { 'class': 'td left' }, [
 				E('button', {
 					'class': 'cbi-button cbi-button-action',
 					'disabled': (!c.ip || c.ip === '-') ? '' : null,
-					'click': function() { onScan(c.ip); }
+					'click': function() { onScan(c.ip, portsInput.value); }
 				}, 'スキャン'),
 				' ',
 				E('button', {
@@ -150,7 +169,7 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 					// 有線接続は切断コマンドの対象外(Wi-Fiクライアントのみ)。
 					'disabled': (c.link === 'wired' || !c.mac || c.mac === '-') ? '' : null,
 					'click': function() {
-						if (confirm((c.name || c.mac) + ' をWi-Fiから切断します。よろしいですか?'))
+						if (confirm((c.name || c.mac) + ' をWi-Fiから一時的に切断します。パスワードを知っていればすぐ再接続されます。よろしいですか?'))
 							onDisconnect(c.mac);
 					}
 				}, '切断')
@@ -205,13 +224,14 @@ return view.extend({
 							ui.addNotification(null, E('p', {}, res.error), 'danger');
 							return;
 						}
+						ui.addNotification(null, E('p', {}, 'メモを保存しました。'), 'info');
 						return reload();
 					}).catch(function(err) {
 						ui.addNotification(null, E('p', {}, String(err)), 'danger');
 					});
 				},
-				onScan: function(ip) {
-					callScanPorts(ip).then(function(res) {
+				onScan: function(ip, ports) {
+					callScanPorts(ip, ports || '').then(function(res) {
 						showPortScanResult(ip, res || {});
 					}).catch(function(err) {
 						ui.addNotification(null, E('p', {}, String(err)), 'danger');

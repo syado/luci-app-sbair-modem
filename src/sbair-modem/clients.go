@@ -278,8 +278,11 @@ func clientList() map[string]any {
 		pending = append(pending, ip)
 	}
 	mdnsNames := mdnsReverseLookup(pending)
-	// NBNS(NetBIOS)はWindows機、SSDP(UPnP)はスマートTV・プリンター等、
-	// mDNS/DNSに応答しない機器の最後の手段として追加した。
+	// LLMNR(llmnr.go)はNetBIOSより新しく、Windows機がファイル共有を
+	// 切っていても大抵は生きている。NBNS(NetBIOS)はより古いWindows機、
+	// SSDP(UPnP)はスマートTV・プリンター等、それでも応答しない機器の
+	// 最後の手段として追加した。
+	llmnrNames := llmnrReverseLookup(pending)
 	nbnsNames := nbnsLookup(pending)
 	ssdpNames := ssdpDiscover()
 	notes := clientNotes()
@@ -295,7 +298,7 @@ func clientList() map[string]any {
 		ip := ips[e.mac]
 		name := firstValidName(names[e.mac], ptrNames[e.mac])
 		if name == "" && ip != "" {
-			name = firstValidName(mdnsNames[ip], nbnsNames[ip], ssdpNames[ip])
+			name = firstValidName(mdnsNames[ip], llmnrNames[ip], nbnsNames[ip], ssdpNames[ip])
 		}
 		if name == "" {
 			name = "-"
