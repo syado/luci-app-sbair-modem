@@ -170,8 +170,8 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 
 		rows.push(E('tr', { 'class': 'tr' }, [
 			clampCell(c.name || '-', '7em'),
-			E('td', { 'class': 'td left' }, c.ip || '-'),
-			E('td', { 'class': 'td left' }, c.mac || '-'),
+			E('td', { 'class': 'td left', 'title': c.ip || '-' }, c.ip || '-'),
+			E('td', { 'class': 'td left', 'title': c.mac || '-' }, c.mac || '-'),
 			clampCell(c.vendor || '-', '10em'),
 			clampCell(c.os || '-', '4em'),
 			clampCell(linkCell(c), '10em'),
