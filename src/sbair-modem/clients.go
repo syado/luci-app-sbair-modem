@@ -179,7 +179,7 @@ func guessOSFromTTL(ttl int) string {
 	case ttl >= 120 && ttl <= 128:
 		return "Windows"
 	case ttl >= 250:
-		return "ネットワーク機器"
+		return "Network系"
 	default:
 		return "不明"
 	}

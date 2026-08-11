@@ -163,11 +163,18 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 			E('td', { 'class': 'td left' }, c.mac || '-'),
 			E('td', {
 				'class': 'td left',
-				'style': 'max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',
-				'title': c.vendor || ''
+				// 省略記号は使わず全部見せる。ただし際限なく横に伸びないよう
+				// 幅は絞り、収まらない分は2行まで折り返す(3行目以降は隠す)。
+				'style': 'max-width:11em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
 			}, c.vendor || '-'),
-			E('td', { 'class': 'td left', 'style': 'white-space:nowrap' }, c.os || '-'),
-			E('td', { 'class': 'td left', 'style': 'white-space:nowrap' }, linkCell(c)),
+			E('td', {
+				'class': 'td left',
+				'style': 'max-width:8em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+			}, c.os || '-'),
+			E('td', {
+				'class': 'td left',
+				'style': 'max-width:10em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+			}, linkCell(c)),
 			E('td', { 'class': 'td left' }, noteInput),
 			// 🔴 tdに直接display:flexを当てると、ブラウザによってはtable-cellの
 			// 既定のvertical-align(メモ欄など他の素のtdが縦中央になる由来)が
@@ -188,12 +195,14 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 						// 「一時切断」= knsh経由でAP側からその場でdeauthするだけで、
 						// パスワードを知っていれば端末側からすぐ再接続される。恒久的な
 						// ブロックではない(そちらはMACフィルタ画面の役目)。
+						// 🔌(プラグ)は「一時的」であることが伝わりにくいとの指摘で
+						// ⏸(一時停止)に変更。「切る」ではなく「今だけ止める」イメージ。
 						'disabled': (c.link === 'wired' || !c.mac || c.mac === '-') ? '' : null,
 						'click': function() {
 							if (confirm((c.name || c.mac) + ' をWi-Fiから一時的に切断します。パスワードを知っていればすぐ再接続されます。よろしいですか?'))
 								onDisconnect(c.mac);
 						}
-					}, '🔌')
+					}, '⏸')
 				])
 			])
 		]));
