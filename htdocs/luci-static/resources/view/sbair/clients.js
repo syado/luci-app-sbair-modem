@@ -161,28 +161,40 @@ function clientTable(list, sortKey, sortDir, onSort, onSaveNote, onScan, onDisco
 			E('td', { 'class': 'td left' }, c.name || '-'),
 			E('td', { 'class': 'td left' }, c.ip || '-'),
 			E('td', { 'class': 'td left' }, c.mac || '-'),
-			E('td', { 'class': 'td left' }, c.vendor || '-'),
-			E('td', { 'class': 'td left' }, c.os || '-'),
-			E('td', { 'class': 'td left' }, linkCell(c)),
+			E('td', {
+				'class': 'td left',
+				'style': 'max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap',
+				'title': c.vendor || ''
+			}, c.vendor || '-'),
+			E('td', { 'class': 'td left', 'style': 'white-space:nowrap' }, c.os || '-'),
+			E('td', { 'class': 'td left', 'style': 'white-space:nowrap' }, linkCell(c)),
 			E('td', { 'class': 'td left' }, noteInput),
-			E('td', { 'class': 'td left', 'style': 'display:flex;gap:.4em;white-space:nowrap' }, [
-				E('button', {
-					'class': 'cbi-button cbi-button-action',
-					'disabled': (!c.ip || c.ip === '-') ? '' : null,
-					'click': function() { onScan(c.ip, ''); }
-				}, 'スキャン'),
-				E('button', {
-					'class': 'cbi-button cbi-button-remove',
-					// 有線接続は切断コマンドの対象外(Wi-Fiクライアントのみ)。
-					// 「一時切断」= knsh経由でAP側からその場でdeauthするだけで、
-					// パスワードを知っていれば端末側からすぐ再接続される。恒久的な
-					// ブロックではない(そちらはMACフィルタ画面の役目)。
-					'disabled': (c.link === 'wired' || !c.mac || c.mac === '-') ? '' : null,
-					'click': function() {
-						if (confirm((c.name || c.mac) + ' をWi-Fiから一時的に切断します。パスワードを知っていればすぐ再接続されます。よろしいですか?'))
-							onDisconnect(c.mac);
-					}
-				}, '一時切断')
+			// 🔴 tdに直接display:flexを当てると、ブラウザによってはtable-cellの
+			// 既定のvertical-align(メモ欄など他の素のtdが縦中央になる由来)が
+			// 効かなくなり、メモ欄と縦位置がずれる。tdは素のままにして、
+			// 中にflexのdivを1枚だけ入れる。
+			E('td', { 'class': 'td left' }, [
+				E('div', { 'style': 'display:flex;gap:.4em;white-space:nowrap' }, [
+					E('button', {
+						'class': 'cbi-button cbi-button-action',
+						'title': 'ポートスキャン',
+						'disabled': (!c.ip || c.ip === '-') ? '' : null,
+						'click': function() { onScan(c.ip, ''); }
+					}, '🔍'),
+					E('button', {
+						'class': 'cbi-button cbi-button-remove',
+						'title': '一時切断(Wi-Fiのみ。恒久ブロックではない)',
+						// 有線接続は切断コマンドの対象外(Wi-Fiクライアントのみ)。
+						// 「一時切断」= knsh経由でAP側からその場でdeauthするだけで、
+						// パスワードを知っていれば端末側からすぐ再接続される。恒久的な
+						// ブロックではない(そちらはMACフィルタ画面の役目)。
+						'disabled': (c.link === 'wired' || !c.mac || c.mac === '-') ? '' : null,
+						'click': function() {
+							if (confirm((c.name || c.mac) + ' をWi-Fiから一時的に切断します。パスワードを知っていればすぐ再接続されます。よろしいですか?'))
+								onDisconnect(c.mac);
+						}
+					}, '🔌')
+				])
 			])
 		]));
 	});

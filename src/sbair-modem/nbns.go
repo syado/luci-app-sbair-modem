@@ -48,17 +48,31 @@ func nbstatQuery() []byte {
 // 32バイトずれて無関係なバイト列を「名前」として表示してしまった。
 // mdns.goのreadName(DNS形式の圧縮ポインタ・生名前どちらにも対応)を使って
 // きちんと辿るように直した。
+//
+// 🔴 **2026-08-12、実機のWindows機を相手に再度踏んだ**: 上の修正後も
+// 常に空を返していた。Pythonで生バイトを取って手で追ったところ、
+// **QDCOUNT が 0 の応答が実在する**(Windows機の実測: ヘッダは
+// `00 00 84 00 00 00 00 01 00 00 00 00` = QDCOUNT=0, ANCOUNT=1)。
+// 質問部が無いのに「質問部を読み飛ばす」処理を固定でやっていたため、
+// 残り全体のオフセットがまるごとズレて何も拾えていなかった。
+// QDCOUNT を見て、0 なら質問部の読み飛ばしそのものを省略する。
 func parseNBSTAT(msg []byte) string {
 	if len(msg) < 12 {
 		return ""
 	}
-	_, off, err := readName(msg, 12) // 質問部のNAMEを読み飛ばす
-	if err != nil || off+4 > len(msg) {
-		return ""
-	}
-	off += 4 // QTYPE + QCLASS
+	qdcount := binary.BigEndian.Uint16(msg[4:6])
 
-	_, off, err = readName(msg, off) // AnswerのNAME
+	off := 12
+	if qdcount > 0 {
+		var err error
+		_, off, err = readName(msg, off) // 質問部のNAMEを読み飛ばす
+		if err != nil || off+4 > len(msg) {
+			return ""
+		}
+		off += 4 // QTYPE + QCLASS
+	}
+
+	_, off, err := readName(msg, off) // AnswerのNAME
 	if err != nil || off+10 > len(msg) {
 		return ""
 	}
